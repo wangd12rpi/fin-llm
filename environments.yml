@@ -2,10 +2,6 @@ name: /home/yanglet/software/miniconda3/envs/tl
 channels:
   - pytorch
   - nvidia/label/cuda-11.3.0
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free
-  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
   - conda-forge
   - defaults
 dependencies:
@@ -339,4 +335,3 @@ dependencies:
       - yarl==1.6.3
       - zipp==3.16.2
       - zstandard==0.21.0
-(b
