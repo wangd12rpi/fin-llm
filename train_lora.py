@@ -1,5 +1,5 @@
 import os
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 from transformers.integrations import TensorBoardCallback
 from transformers import AutoTokenizer, AutoModel  # Model,Tokenizer
 from transformers import DataCollatorForLanguageModeling  # Datacollator
@@ -19,17 +19,15 @@ from peft import (
     LoraConfig,
     get_peft_model,
     get_peft_model_state_dict,
-    # prepare_model_for_int8_training,
     prepare_model_for_kbit_training,
     set_peft_model_state_dict,
 )
 
 # Model,Tokenizer, Datacollator
-model_name = "daryl149/Llama-2-13b-chat-hf"
+model_name = "meta-llama/Llama-3.1-8B-Instruct"
 # model_name = '/colab_space/yanglet/models--daryl149--Llama-2-7b-chat-hf/snapshots/bbc9b373dacff93e600e4426f2b3d3dd264e90ed'
 tokenizer = LlamaTokenizerFast.from_pretrained(model_name, trust_remote_code=True)
 tokenizer.pad_token = tokenizer.eos_token
-
 
 # Trainer
 class ModifiedTrainer(Trainer):
@@ -90,7 +88,7 @@ class CastOutputToFloat(torch.nn.Sequential):
 def main():
     # load data
     # dataset = datasets.load_from_disk("./data/dataset_new")
-    dataset = datasets.load_from_disk("./data/dataset_fin")
+    dataset = datasets.load_from_disk("./data/fingpt_data_train_token")
     dataset = dataset.train_test_split(0.2, shuffle=True, seed=42)
 
     device_map = "auto"
@@ -106,17 +104,17 @@ def main():
     # import deepspeed
     # deepspeed.init_distributed(dist_backend = "gloo")
     training_args = TrainingArguments(
-        output_dir='./test',
+        output_dir='./llama3.1_7b_out',
         # output_dir='./test',
-        logging_steps=100,
+        logging_steps=200,
         # max_steps=10000,
         num_train_epochs=2 * 4,
-        per_device_train_batch_size=4,
+        per_device_train_batch_size=8,
         gradient_accumulation_steps=8,
         learning_rate=1e-4,
         weight_decay=0.01,
-        warmup_steps=500,
-        save_steps=1000,
+        warmup_steps=200,
+        save_steps=400,
         # ddp_backend = 'gloo',
         fp16=True,
         # bf16=True,
@@ -131,12 +129,15 @@ def main():
         dataloader_pin_memory=True
     )
 
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=torch.bfloat16,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type='nf4'
-    )
+    # quantization_config = BitsAndBytesConfig(
+    #     load_in_4bit=True,
+    #     bnb_4bit_compute_dtype=torch.bfloat16,
+    #     bnb_4bit_use_double_quant=True,
+    #     bnb_4bit_quant_type='nf4'
+    # )
+
+    quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+
 
     # load model
     model = LlamaForCausalLM.from_pretrained(
@@ -146,11 +147,11 @@ def main():
         trust_remote_code=True,
         device_map=device_map,
         torch_dtype=torch.float16,
-        # quantization_config = quantization_config
-        cache_dir='/colab_space/yanglet/model_weight/LLM'
+        quantization_config = quantization_config
+        # cache_dir='/colab_space/yanglet/model_weight/LLM'
     )
 
-    # model = prepare_model_for_kbit_training(model)
+    model = prepare_model_for_kbit_training(model)
 
     # setup peft
     peft_config = LoraConfig(
@@ -195,14 +196,7 @@ def main():
         data_collator=data_collator,
         callbacks=[TensorBoardCallback(writer)],
     )
-    # trainer = Trainer(
-    #     model=model,
-    #     args=training_args,
-    #     train_dataset=dataset["train"],
-    #     eval_dataset=dataset["test"],
-    #     data_collator=data_collator,
-    #     callbacks=[TensorBoardCallback(writer)],
-    # )
+
     trainer.train()
     writer.close()
     # save model
