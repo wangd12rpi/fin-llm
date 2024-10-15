@@ -89,7 +89,7 @@ def main():
     # load data
     # dataset = datasets.load_from_disk("./data/dataset_new")
     dataset = datasets.load_from_disk("./data/fingpt_data_train_token")
-    dataset = dataset.train_test_split(0.2, shuffle=True, seed=42)
+    dataset = dataset.train_test_split(0.02, shuffle=True, seed=42)
 
     device_map = "auto"
     world_size = int(os.environ.get("WORLD_SIZE", 1))
@@ -104,12 +104,12 @@ def main():
     # import deepspeed
     # deepspeed.init_distributed(dist_backend = "gloo")
     training_args = TrainingArguments(
-        output_dir='./llama3.1_7b_out',
+        output_dir='./l-8b-r8-out',
         # output_dir='./test',
         logging_steps=200,
-        # max_steps=10000,
+        # max_steps=800,
         num_train_epochs=2 * 4,
-        per_device_train_batch_size=8,
+        per_device_train_batch_size=10,
         gradient_accumulation_steps=8,
         learning_rate=1e-4,
         weight_decay=0.01,
@@ -147,7 +147,7 @@ def main():
         trust_remote_code=True,
         device_map=device_map,
         torch_dtype=torch.float16,
-        quantization_config = quantization_config
+        # quantization_config = quantization_config
         # cache_dir='/colab_space/yanglet/model_weight/LLM'
     )
 
@@ -157,7 +157,7 @@ def main():
     peft_config = LoraConfig(
         task_type=TaskType.CAUSAL_LM,
         inference_mode=False,
-        r=4,
+        r=8,
         lora_alpha=32,
         lora_dropout=0.1,
         target_modules=['q_proj', "k_proj", 'v_proj'],
