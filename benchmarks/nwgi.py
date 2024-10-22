@@ -8,6 +8,8 @@ import datasets
 import torch
 from pathlib import Path
 
+import pandas as pd
+
 dic = {
     'strong negative':"negative",
     'moderately negative':"negative",
@@ -37,6 +39,7 @@ def change_target(x):
 def test_nwgi(args, model, tokenizer, prompt_fun=None):
     batch_size = args.batch_size
     dataset = load_dataset('oliverwang15/news_with_gpt_instructions')['test']
+    dataset = pd.DataFrame(dataset)
     # dataset = load_from_disk(Path(__file__).parent.parent / 'data/news_with_gpt_instructions/')
     # dataset['output'] = dataset['label'].apply(lambda x:dic[x])
     dataset['output'] = dataset['label'].apply(lambda x:x)
@@ -69,6 +72,7 @@ def test_nwgi(args, model, tokenizer, prompt_fun=None):
             tokens[k] = tokens[k].cuda()
         res = model.generate(**tokens, max_length=512, eos_token_id=tokenizer.eos_token_id)
         res_sentences = [tokenizer.decode(i, skip_special_tokens=True) for i in res]
+        print(f'{i}: {res_sentences[0]}')
         out_text = [o.split("Answer: ")[1] for o in res_sentences]
         out_text_list += out_text
         torch.cuda.empty_cache()
