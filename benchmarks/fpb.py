@@ -79,13 +79,15 @@ def test_fpb(args, model, tokenizer, prompt_fun=None):
 
     out_text_list = []
     for i in tqdm(range(total_steps)):
-        tmp_context = context[i* batch_size:(i+1)* batch_size]
+        tmp_context = context[i* batch_size: min(len(context), (i+1)* batch_size)]
+        if len(tmp_context) == 0:
+            continue
         tokens = tokenizer(tmp_context, return_tensors='pt', padding=True, max_length=512, return_token_type_ids=False)
         for k in tokens.keys():
             tokens[k] = tokens[k].cuda()
         res = model.generate(**tokens, max_length=512, eos_token_id=tokenizer.eos_token_id)
         res_sentences = [tokenizer.decode(i, skip_special_tokens=True) for i in res]
-        print(f'{i}: {res_sentences[0]}')
+        # print(f'{i}: {res_sentences[0]}')
         out_text = [o.split("Answer: ")[1] for o in res_sentences]
         out_text_list += out_text
         torch.cuda.empty_cache()
@@ -99,7 +101,7 @@ def test_fpb(args, model, tokenizer, prompt_fun=None):
     f1_micro = f1_score(instructions["new_target"], instructions["new_out"], average = "micro")
     f1_weighted = f1_score(instructions["new_target"], instructions["new_out"], average = "weighted")
 
-    print(f"Acc: {acc}. F1 macro: {f1_macro}. F1 micro: {f1_micro}. F1 weighted (BloombergGPT): {f1_weighted}. ")
+    print(f"FPB: Acc: {acc}. F1 macro: {f1_macro}. F1 micro: {f1_micro}. F1 weighted (BloombergGPT): {f1_weighted}. ")
 
     return instructions
 
@@ -163,6 +165,6 @@ def test_fpb_mlt(args, model, tokenizer):
         f1_micro = f1_score(dataset["target"], dataset[k], average="micro")
         f1_weighted = f1_score(dataset["target"], dataset[k], average="weighted")
 
-        print(f"Acc: {acc}. F1 macro: {f1_macro}. F1 micro: {f1_micro}. F1 weighted (BloombergGPT): {f1_weighted}. ")
+        print(f"FPB: Acc: {acc}. F1 macro: {f1_macro}. F1 micro: {f1_micro}. F1 weighted (BloombergGPT): {f1_weighted}. ")
 
     return dataset
