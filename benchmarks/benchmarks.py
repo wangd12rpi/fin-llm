@@ -28,13 +28,13 @@ def main(args):
 
     model_name = args.base_model
         
-    # bnb_config = BitsAndBytesConfig(
-    #     # load_in_4bit=args.quant_bits == 4,  # Load in 4-bit if quant_bits is 4
-    #     load_in_8bit=args.quant_bits == 8,  # Load in 8-bit if quant_bits is 8
-    #     bnb_4bit_quant_type="nf4",
-    #     bnb_4bit_use_double_quant=True,
-    #     bnb_4bit_compute_dtype=torch.bfloat16
-    # )
+    bnb_config = BitsAndBytesConfig(
+        # load_in_4bit=args.quant_bits == 4,  # Load in 4-bit if quant_bits is 4
+        load_in_8bit=args.quant_bits == 8,  # Load in 8-bit if quant_bits is 8
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_compute_dtype=torch.bfloat16
+    )
     
     model = AutoModelForCausalLM.from_pretrained(
         model_name, trust_remote_code=True, 
@@ -53,9 +53,10 @@ def main(args):
     # tokenizer.pad_token_id = tokenizer.eos_token_id
 
     tokenizer.padding_side = "left"
-    # if args.base_model == 'qwen':
-    #     tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids('<|endoftext|>')
-    #     tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids('<|extra_0|>')
+    if args.base_model == 'qwen':
+        tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids('<|endoftext|>')
+        tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids('<|extra_0|>')
+    
     if not tokenizer.pad_token or tokenizer.pad_token_id == tokenizer.eos_token_id:
         tokenizer.add_special_tokens({'pad_token': '[PAD]'})
         model.resize_token_embeddings(len(tokenizer))

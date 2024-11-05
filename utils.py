@@ -1,215 +1,281 @@
+# coding=utf-8
+# Copyright 2024 Sourab Mangrulkar. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from enum import Enum
+import gc
 import os
-import datasets
+import torch
+from datasets import DatasetDict, load_dataset, load_from_disk
+from datasets.builder import DatasetGenerationError
+from peft import LoraConfig, replace_lora_weights_loftq
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    BitsAndBytesConfig,
+)
+current_mse = float("inf")
 
-# A dictionary to store various prompt templates.
-template_dict = {
-    'default': 'Instruction: {instruction}\nInput: {input}\nAnswer: '
-}
-
-# A dictionary to store the LoRA module mapping for different models.
-lora_module_dict = {
-    'chatglm2': ['query_key_value'],
-    'falcon': ['query_key_value'],
-    'bloom': ['query_key_value'],
-    'internlm': ['q_proj', 'k_proj', 'v_proj'],
-    'llama2': ['q_proj', 'k_proj', 'v_proj'],
-    'llama2-13b': ['q_proj', 'k_proj', 'v_proj'],
-    'llama2-13b-nr': ['q_proj', 'k_proj', 'v_proj'],
-    'qwen': ["c_attn"],
-    'mpt': ['Wqkv'],
-    'baichuan': ['q_proj', 'k_proj', 'v_proj'],
-}
+DEFAULT_CHATML_CHAT_TEMPLATE = "{% for message in messages %}\n{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% if loop.last and add_generation_prompt %}{{'<|im_start|>assistant\n' }}{% endif %}{% endfor %}"
+DEFAULT_ZEPHYR_CHAT_TEMPLATE = "{% for message in messages %}\n{% if message['role'] == 'user' %}\n{{ '<|user|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'system' %}\n{{ '<|system|>\n' + message['content'] + eos_token }}\n{% elif message['role'] == 'assistant' %}\n{{ '<|assistant|>\n'  + message['content'] + eos_token }}\n{% endif %}\n{% if loop.last and add_generation_prompt %}\n{{ '<|assistant|>' }}\n{% endif %}\n{% endfor %}"
 
 
-def get_prompt(template, instruction, input_text):
-    """
-    Generates a prompt based on a predefined template, instruction, and input.
+class ZephyrSpecialTokens(str, Enum):
+    user = "<|user|>"
+    assistant = "<|assistant|>"
+    system = "<|system|>"
+    eos_token = "</s>"
+    bos_token = "<s>"
+    pad_token = "<pad>"
 
-    Args:
-    template (str): The key to select the prompt template from the predefined dictionary.
-    instruction (str): The instruction text to be included in the prompt.
-    input_text (str): The input text to be included in the prompt.
-
-    Returns:
-    str: The generated prompt.
-
-    Raises:
-    KeyError: If the provided template key is not found in the template dictionary.
-    """
-    if not instruction:
-        return input_text
-
-    if template not in template_dict:
-        raise KeyError(f"Template '{template}' not found. Available templates: {', '.join(template_dict.keys())}")
-
-    return template_dict[template].format(instruction=instruction, input=input_text)
+    @classmethod
+    def list(cls):
+        return [c.value for c in cls]
 
 
-def test_mapping(args, feature):
-    """
-    Generate a mapping for testing purposes by constructing a prompt based on given instructions and input.
+class ChatmlSpecialTokens(str, Enum):
+    user = "<|im_start|>user"
+    assistant = "<|im_start|>assistant"
+    system = "<|im_start|>system"
+    eos_token = "<|im_end|>"
+    bos_token = "<s>"
+    pad_token = "<pad>"
 
-    Args:
-    args (Namespace): A namespace object that holds various configurations, including the instruction template.
-    feature (dict): A dictionary containing 'instruction' and 'input' fields used to construct the prompt.
-
-    Returns:
-    dict: A dictionary containing the generated prompt.
-
-    Raises:
-    ValueError: If 'instruction' or 'input' are not provided in the feature dictionary.
-    """
-    # Ensure 'instruction' and 'input' are present in the feature dictionary.
-    if 'instruction' not in feature or 'input' not in feature:
-        raise ValueError("Both 'instruction' and 'input' need to be provided in the feature dictionary.")
-
-    # Construct the prompt using the provided instruction and input.
-    prompt = get_prompt(
-        args.instruct_template,
-        feature['instruction'],
-        feature['input']
-    )
-
-    return {
-        "prompt": prompt,
-    }
-
-def tokenize(args, tokenizer, feature):
-    """
-    Tokenizes the input prompt and target/output for model training or evaluation.
-
-    Args:
-    args (Namespace): A namespace object containing various settings and configurations.
-    tokenizer (Tokenizer): A tokenizer object used to convert text into tokens.
-    feature (dict): A dictionary containing 'input', 'instruction', and 'output' fields.
-
-    Returns:
-    dict: A dictionary containing tokenized 'input_ids', 'labels', and a flag 'exceed_max_length'.
-    """
-    # Generate the prompt.
-    prompt = get_prompt(
-        args.instruct_template,
-        feature['instruction'],
-        feature['input']
-    )
-    # Tokenize the prompt.
-    prompt_ids = tokenizer(
-        prompt,
-        padding=False,
-        max_length=args.max_length,
-        truncation=True
-    )['input_ids']
-
-    # Tokenize the target/output.
-    target_ids = tokenizer(
-        feature['output'].strip(),
-        padding=False,
-        max_length=args.max_length,
-        truncation=True,
-        add_special_tokens=False
-    )['input_ids']
-
-    # Combine tokenized prompt and target output.
-    input_ids = prompt_ids + target_ids
-
-    # Check if the combined length exceeds the maximum allowed length.
-    exceed_max_length = len(input_ids) >= args.max_length
-
-    # Add an end-of-sequence (EOS) token if it's not already present
-    # and if the sequence length is within the limit.
-    if input_ids[-1] != tokenizer.eos_token_id and not exceed_max_length:
-        input_ids.append(tokenizer.eos_token_id)
-
-    # Create label IDs for training.
-    # The labels should start from where the prompt ends, and be padded for the prompt portion.
-    label_ids = [tokenizer.pad_token_id] * len(prompt_ids) + input_ids[len(prompt_ids):]
-    
-    return {
-        "input_ids": input_ids,
-        "labels": label_ids,
-        "exceed_max_length": exceed_max_length
-    }
+    @classmethod
+    def list(cls):
+        return [c.value for c in cls]
 
 
-def parse_model_name(name, from_remote=False):
-    """
-    Parse the model name and return the appropriate path based on whether
-    the model is to be fetched from a remote source or from a local source.
+def create_datasets(tokenizer, data_args, training_args, apply_chat_template=False):
+    def preprocess(samples):
+        batch = []
+        for conversation in samples["messages"]:
+            batch.append(tokenizer.apply_chat_template(conversation, tokenize=False))
+        return {"content": batch}
 
-    Args:
-    - name (str): Name of the model.
-    - from_remote (bool): If True, return the remote path, else return the local path.
-
-    Returns:
-    - str: The appropriate path for the given model name.
-    """
-    model_paths = {
-        'chatglm2': ('THUDM/chatglm2-6b', 'base_models/chatglm2-6b'),
-        'llama2': ('meta-llama/Llama-2-7b-hf', 'base_models/Llama-2-7b-hf'),
-        'llama2-13b': ('meta-llama/Llama-2-13b-hf', 'base_models/Llama-2-13b-hf'),
-        'llama2-13b-nr': ('NousResearch/Llama-2-13b-hf', 'base_models/Llama-2-13b-hf'),
-        'falcon': ('tiiuae/falcon-7b', 'base_models/falcon-7b'),
-        'internlm': ('internlm/internlm-7b', 'base_models/internlm-7b'),
-        'qwen': ('Qwen/Qwen-7B', 'base_models/Qwen-7B'),
-        'baichuan': ('baichuan-inc/Baichuan2-7B-Base', 'base_models/Baichuan2-7B-Base'),
-        'mpt': ('cekal/mpt-7b-peft-compatible', 'base_models/mpt-7b-peft-compatible'),
-        'bloom': ('bigscience/bloom-7b1', 'base_models/bloom-7b1')
-    }
-
-    if name in model_paths:
-        return model_paths[name][0] if from_remote else model_paths[name][1]
-    else:
-        valid_model_names = ', '.join(model_paths.keys())
-        raise ValueError(f"Undefined base model '{name}'. Valid model names are: {valid_model_names}")
-
-
-def load_dataset(names, from_remote=False):
-    """
-    Load one or multiple datasets based on the provided names and source location.
-
-    Args:
-    names (str): A comma-separated list of dataset names. Each name can be followed by '*n' to indicate replication.
-    from_remote (bool): If True, load the dataset from Hugging Face's model hub. Otherwise, load it from a local disk.
-
-    Returns:
-    List[Dataset]: A list of loaded datasets. Each dataset is possibly replicated based on the input names.
-    """
-    # Split the dataset names by commas for handling multiple datasets
-    dataset_names = names.split(',')
-    dataset_list = []
-
-    for name in dataset_names:
-        # Initialize replication factor to 1
-        replication_factor = 1
-        dataset_name = name
-
-        # Check if the dataset name includes a replication factor
-        if '*' in name:
-            dataset_name, replication_factor = name.split('*')
-            replication_factor = int(replication_factor)
-            if replication_factor < 1:
-                raise ValueError("Replication factor must be a positive integer.")
-
-        # Construct the correct dataset path or name based on the source location
-        dataset_path_or_name = dataset_name
-        # if not os.path.exists(dataset_path_or_name) and not from_remote:
-        #     raise FileNotFoundError(f"The dataset path {dataset_path_or_name} does not exist.")
-
-        # Load the dataset
+    raw_datasets = DatasetDict()
+    for split in data_args.splits.split(","):
         try:
-            tmp_dataset = datasets.load_dataset(dataset_path_or_name)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load the dataset: {str(e)}")
+            # Try first if dataset on a Hub repo
+            dataset = load_dataset(data_args.dataset_name, split=split)
+        except DatasetGenerationError:
+            # If not, check local dataset
+            dataset = load_from_disk(os.path.join(data_args.dataset_name, split))
 
-        # Check for 'test' split and create it from 'train' if necessary
-        if 'test' not in tmp_dataset:
-            if 'train' in tmp_dataset:
-                tmp_dataset = tmp_dataset['train']
-                tmp_dataset = tmp_dataset.train_test_split(test_size=0.2, shuffle=True, seed=42)
-            else:
-                raise ValueError("The dataset must contain a 'train' or 'test' split.")
+        if "train" in split:
+            raw_datasets["train"] = dataset
+        elif "test" in split:
+            raw_datasets["test"] = dataset
+        else:
+            raise ValueError(
+                f"Split type {split} not recognized as one of test or train."
+            )
 
-        # Append the possibly replicated dataset to the list
-        dataset_list.extend([tmp_dataset] * replication_factor)
+    if apply_chat_template:
+        raw_datasets = raw_datasets.map(
+            preprocess,
+            batched=True,
+            remove_columns=raw_datasets["train"].column_names,
+        )
 
-    return dataset_list
+    train_data = raw_datasets["train"]
+    valid_data = raw_datasets["test"]
+    print(
+        f"Size of the train set: {len(train_data)}. Size of the validation set: {len(valid_data)}"
+    )
+    print(f"A sample of train dataset: {train_data[0]}")
+
+    return train_data, valid_data
+
+
+def create_and_prepare_model(args, data_args, training_args):
+    if args.use_unsloth:
+        from unsloth import FastLanguageModel
+    bnb_config = None
+    quant_storage_stype = None
+    load_in_8bit = args.use_8bit_qunatization
+    load_in_4bit = args.use_4bit_quantization
+
+    if (
+        torch.distributed.is_available()
+        and torch.distributed.is_initialized()
+        and torch.distributed.get_world_size() > 1
+        and args.use_unsloth
+    ):
+        raise NotImplementedError("Unsloth is not supported in distributed training")
+
+    if args.use_4bit_quantization:
+        compute_dtype = getattr(torch, args.bnb_4bit_compute_dtype)
+        quant_storage_stype = getattr(torch, args.bnb_4bit_quant_storage_dtype)
+
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=args.use_4bit_quantization,
+            bnb_4bit_quant_type=args.bnb_4bit_quant_type,
+            bnb_4bit_compute_dtype=compute_dtype,
+            bnb_4bit_use_double_quant=args.use_nested_quant,
+            bnb_4bit_quant_storage=quant_storage_stype,
+        )
+
+        if compute_dtype == torch.float16 and args.use_4bit_quantization:
+            major, _ = torch.cuda.get_device_capability()
+            if major >= 8:
+                print("=" * 80)
+                print(
+                    "Your GPU supports bfloat16, you can accelerate training with the argument --bf16"
+                )
+                print("=" * 80)
+
+    if args.use_unsloth:
+        # Load model
+        model, _ = FastLanguageModel.from_pretrained(
+            model_name=args.model_name_or_path,
+            max_seq_length=data_args.max_seq_length,
+            dtype=None,
+            load_in_4bit=load_in_4bit,
+        )
+    else:
+        torch_dtype = quant_storage_stype if quant_storage_stype and quant_storage_stype.is_floating_point else torch.float32
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_name_or_path,
+            load_in_8bit=load_in_8bit,
+            quantization_config=bnb_config,
+            trust_remote_code=True,
+            attn_implementation="flash_attention_2" if args.use_flash_attn else "eager",
+            torch_dtype=torch_dtype,
+        )
+
+    peft_config = None
+    chat_template = None
+    if args.use_peft_lora and not args.use_unsloth:
+        peft_config = LoraConfig(
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            r=args.lora_r,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=args.lora_target_modules.split(",")
+            if args.lora_target_modules != "all-linear"
+            else args.lora_target_modules,
+        )
+
+    special_tokens = None
+    chat_template = None
+    if args.chat_template_format == "chatml":
+        special_tokens = ChatmlSpecialTokens
+        chat_template = DEFAULT_CHATML_CHAT_TEMPLATE
+    elif args.chat_template_format == "zephyr":
+        special_tokens = ZephyrSpecialTokens
+        chat_template = DEFAULT_ZEPHYR_CHAT_TEMPLATE
+
+    if special_tokens is not None:
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model_name_or_path,
+            pad_token=special_tokens.pad_token.value,
+            bos_token=special_tokens.bos_token.value,
+            eos_token=special_tokens.eos_token.value,
+            additional_special_tokens=special_tokens.list(),
+            trust_remote_code=True,
+        )
+        tokenizer.chat_template = chat_template
+        # make embedding resizing configurable?
+        model.resize_token_embeddings(len(tokenizer), pad_to_multiple_of=8)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model_name_or_path, trust_remote_code=True
+        )
+        tokenizer.pad_token = tokenizer.eos_token
+
+    if args.use_unsloth:
+        # Do model patching and add fast LoRA weights
+        model = FastLanguageModel.get_peft_model(
+            model,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            r=args.lora_r,
+            target_modules=args.lora_target_modules.split(",")
+            if args.lora_target_modules != "all-linear"
+            else args.lora_target_modules,
+            use_gradient_checkpointing=training_args.gradient_checkpointing,
+            random_state=training_args.seed,
+            max_seq_length=data_args.max_seq_length,
+        )
+
+    return model, peft_config, tokenizer
+
+def get_mae(x, y):
+    return (x - y).abs().mean()
+
+
+def get_mse(x, y):
+    return torch.pow(x - y, 2).mean()
+
+
+def error_report(x, y):
+    mae = get_mae(x, y)
+    mse = get_mse(x, y)
+    print(
+        f"Mean absolute error: {mae:>8.5f}\n"
+        f"Mean squared error:  {mse:>8.5f}"
+    )
+
+
+def loftq_init(model, tokenizer, train_dataset, max_seq_length, args):
+    if args.use_loftq_callback:
+        compute_dtype = getattr(torch, args.bnb_4bit_compute_dtype)
+        base_model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path, torch_dtype=compute_dtype)
+        base_model.resize_token_embeddings(len(tokenizer), pad_to_multiple_of=8)
+        random_input_ids = torch.randint(0, len(train_dataset), size=(1,)).numpy().tolist()
+        random_inputs = [train_dataset[i]['content'] for i in random_input_ids]
+        random_inputs = tokenizer(random_inputs, return_tensors="pt", padding=True, truncation="max_length", max_length=max_seq_length)
+        logits_base = base_model(**random_inputs).logits
+        del base_model
+        gc.collect()
+        
+        def loftq_callback(model, module_name):
+            """Callable to replace weights with LoFTQ if the mse is lower than the current best one."""
+            global current_mse
+            logits = model(**random_inputs).logits
+            mse = get_mse(logits_base, logits)
+            if mse < current_mse:
+                current_mse = mse
+                print(f"MSE improved for module {module_name}")
+                return True
+            print(f"MSE did not improve for module {module_name}")
+            return False
+        
+        replace_lora_weights_loftq(model, callback=loftq_callback)
+        logits_loftq_callback = model(**random_inputs).logits
+        error_report(logits_base, logits_loftq_callback)
+    else:
+        replace_lora_weights_loftq(model)
+    
+
+def get_module_class_from_name(module, name):
+    """
+    Gets a class from a module by its name.
+
+    Args:
+        module (`torch.nn.Module`): The module to get the class from.
+        name (`str`): The name of the class.
+    """
+    modules_children = list(module.children())
+    if module.__class__.__name__ == name:
+        return module.__class__
+    elif len(modules_children) == 0:
+        return
+    else:
+        for child_module in modules_children:
+            module_class = get_module_class_from_name(child_module, name)
+            if module_class is not None:
+                return module_class

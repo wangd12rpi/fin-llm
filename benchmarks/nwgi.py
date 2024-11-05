@@ -46,7 +46,7 @@ def test_nwgi(args, model, tokenizer, prompt_fun=None):
     
     if prompt_fun is None:
         # dataset["instruction"] = "What is the sentiment of this news? Please choose an answer from {negative/neutral/positive}."
-        dataset["instruction"] = "What is the sentiment of this news? Please choose an answer from {strong negative/moderately negative/mildly negative/neutral/mildly positive/moderately positive/strong positive}."
+        dataset["instruction"] = "What is the sentiment of this news? Please choose an answer from {strong negative/moderately negative/mildly negative/neutral/mildly positive/moderately positive/strong positive}. "
     else:
         dataset["instruction"] = dataset.apply(prompt_fun, axis = 1)
     dataset["input"] = dataset["news"].apply(lambda x:x)
@@ -75,6 +75,7 @@ def test_nwgi(args, model, tokenizer, prompt_fun=None):
         res = model.generate(**tokens, max_length=512, eos_token_id=tokenizer.eos_token_id)
         res_sentences = [tokenizer.decode(i, skip_special_tokens=True) for i in res]
         out_text = [o.split("Answer: ")[1] for o in res_sentences]
+        print(out_text)
         out_text_list += out_text
         torch.cuda.empty_cache()
 
