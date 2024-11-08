@@ -39,7 +39,9 @@ def main(args):
     model = AutoModelForCausalLM.from_pretrained(
         model_name, trust_remote_code=True, 
         # quantization_config=bnb_config,
-        device_map="auto"
+        device_map="auto",
+        torch_dtype=torch.bfloat16,
+
     )
 
     model.model_parallel = True
@@ -56,25 +58,14 @@ def main(args):
     if args.base_model == 'qwen':
         tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids('<|endoftext|>')
         tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids('<|extra_0|>')
-    
-    if not tokenizer.pad_token or tokenizer.pad_token_id == tokenizer.eos_token_id:
-        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-        model.resize_token_embeddings(len(tokenizer))
+
+    tokenizer.pad_token = tokenizer.eos_token
+    # if not tokenizer.pad_token or tokenizer.pad_token_id == tokenizer.eos_token_id:
+    #     tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+    #     model.resize_token_embeddings(len(tokenizer))
 
     print(f'pad: {tokenizer.pad_token_id}, eos: {tokenizer.eos_token_id}')
     # model.generation_config.pad_token_id = tokenizer.pad_token_id
-
-    # peft_config = LoraConfig(
-    #     task_type=TaskType.CAUSAL_LM,
-    #     inference_mode=False,
-    #     r=8,
-    #     lora_alpha=32,
-    #     lora_dropout=0.1,
-    #     target_modules=lora_module_dict[args.base_model],
-    #     bias='none',
-    # )
-    # model = get_peft_model(model, peft_config)
-    # model.load_state_dict(torch.load(args.peft_model + '/pytorch_model.bin'))
 
     if args.peft_model != "":
         model = PeftModel.from_pretrained(model, args.peft_model)

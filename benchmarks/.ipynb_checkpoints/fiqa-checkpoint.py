@@ -91,7 +91,7 @@ def test_fiqa(args, model, tokenizer, prompt_fun=add_instructions):
         for k in tokens.keys():
             tokens[k] = tokens[k].cuda()
         
-        res = model.generate(**tokens, max_length=512, eos_token_id=tokenizer.eos_token_id)
+        res = model.generate(**tokens, max_new_tokens=20, eos_token_id=tokenizer.eos_token_id)
         res_sentences = [tokenizer.decode(i, skip_special_tokens=True) for i in res]
         # tqdm.write(f'{i}: {res_sentences[0]}')
         out_text = [o.split("Answer: ")[1] for o in res_sentences]
@@ -100,6 +100,7 @@ def test_fiqa(args, model, tokenizer, prompt_fun=add_instructions):
 
     dataset["out_text"] = out_text_list
     dataset["new_target"] = dataset["target"].apply(change_target)
+    
     dataset["new_out"] = dataset["out_text"].apply(change_target)
 
     acc = accuracy_score(dataset["new_target"], dataset["new_out"])
@@ -109,7 +110,8 @@ def test_fiqa(args, model, tokenizer, prompt_fun=add_instructions):
 
     print(f"FIQA: Acc: {acc}. F1 macro: {f1_macro}. F1 micro: {f1_micro}. F1 weighted (BloombergGPT): {f1_weighted}. ")
 
-    return dataset
+    return {"acc": acc, "f1": f1_weighted}
+    
 
 
 def test_fiqa_mlt(args, model, tokenizer):

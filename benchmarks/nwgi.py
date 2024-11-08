@@ -53,6 +53,7 @@ def test_nwgi(args, model, tokenizer, prompt_fun=None):
 
     dataset = dataset[['input', 'output', 'instruction']]
     dataset[["context","target"]] = dataset.apply(format_example, axis = 1, result_type="expand")
+    
     # dataset = dataset.head(50)
     # print example
     print(f"\n\nPrompt example:\n{dataset['context'][0]}\n")
@@ -68,27 +69,27 @@ def test_nwgi(args, model, tokenizer, prompt_fun=None):
         tmp_context = context[i* batch_size:(i+1)* batch_size]
         if len(tmp_context) == 0:
             continue
-        tokens = tokenizer(tmp_context, return_tensors='pt', padding=True, max_length=512, return_token_type_ids=False)
+        tokens = tokenizer(tmp_context, return_tensors='pt', padding=True, return_token_type_ids=False)
         # tokens.pop('token_type_ids')
         for k in tokens.keys():
             tokens[k] = tokens[k].cuda()
-        res = model.generate(**tokens, max_length=512, eos_token_id=tokenizer.eos_token_id)
+        res = model.generate(**tokens, max_new_tokens=20, eos_token_id=tokenizer.eos_token_id)
         res_sentences = [tokenizer.decode(i, skip_special_tokens=True) for i in res]
-        out_text = [o.split("Answer: ")[1] for o in res_sentences]
-        print(out_text)
+        out_text = [o.split("Answer:")[1].strip() for o in res_sentences]
+        # print(out_text)
         out_text_list += out_text
         torch.cuda.empty_cache()
 
     dataset["out_text"] = out_text_list
-    # dataset["new_target"] = dataset["target"].apply(change_target)
-    # dataset["new_out"] = dataset["out_text"].apply(change_target)
+    dataset["new_target"] = dataset["target"].apply(change_target)
+    dataset["new_out"] = dataset["out_text"].apply(change_target)
     
     # print(dataset["output"], dataset["out_text"])
-    acc = accuracy_score(dataset["output"], dataset["out_text"])
-    f1_macro = f1_score(dataset["output"], dataset["out_text"], average = "macro")
-    f1_micro = f1_score(dataset["output"], dataset["out_text"], average = "micro")
-    f1_weighted = f1_score(dataset["output"], dataset["out_text"], average = "weighted")
+    acc = accuracy_score(dataset["new_out"], dataset["new_target"])
+    f1_macro = f1_score(dataset["new_out"], dataset["new_target"], average = "macro")
+    f1_micro = f1_score(dataset["new_out"], dataset["new_target"], average = "micro")
+    f1_weighted = f1_score(dataset["new_out"], dataset["new_target"], average = "weighted")
 
     print(f"NWIG: Acc: {acc}. F1 macro: {f1_macro}. F1 micro: {f1_micro}. F1 weighted (BloombergGPT): {f1_weighted}. ")
     
-    return dataset
+    return {"acc": acc, "f1": f1_weighted}

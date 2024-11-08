@@ -9,79 +9,65 @@ from pathlib import Path
 
 import sys
 sys.path.append("../")
-from utils import *
-
-import sys
-sys.path.append('../')
-    
-    
-    
-def binary2multi(dataset):
-    pred, label = [], []
-    tmp_pred, tmp_label = [], []
-    for i, row in dataset.iterrows():
-        tmp_pred.append(row['pred'])
-        tmp_label.append(row['label'])
-        if (i + 1) % 9 == 0:
-            pred.append(tmp_pred)
-            label.append(tmp_label)
-            tmp_pred, tmp_label = [], []
-    return pred, label
 
 
-def map_output(feature):
-    pred = 1 if 'yes' in feature['out_text'].lower() else 0
-    label = 1 if 'yes' in feature['output'].lower() else 0
-    return {'label': label, 'pred': pred}
+def format_example(example: dict) -> dict:
+    context = f"Instruction: {example['instruction']}\n"
+    if example.get("input"):
+        context += f"Input: {example['input']}\n"
+    context += "Answer: "
+    target = example["output"]
+    return {"context": context, "target": target}
+
+def change_target(x):
+    if 'yes' in x.lower():
+        return 'Yes'
+    elif 'no' in x.lower():
+        return 'No'
+    return ''
+    
+def test_headline(args, model, tokenizer, prompt_fun=None):
+    batch_size = args.batch_size
+    instructions = load_dataset("FinGPT/fingpt-headline-cls")
+    # instructions = load_from_disk(Path(__file__).parent.parent / "data/financial_phrasebank-sentences_50agree/")
+    instructions = instructions["test"]    
+    # print example
+    instructions = instructions.to_pandas()
+
+    instructions[["context","target"]] = instructions.apply(format_example, axis = 1, result_type="expand")
+
+    print(f"\n\nPrompt example:\n{instructions['context'][0]}\n\n")
+    context = instructions['context'].tolist()
+    
+    total_steps = instructions.shape[0]//batch_size + 1
+    print(f"Total len: {len(context)}. Batchsize: {batch_size}. Total steps: {total_steps}")
 
 
-def test_headline(args, model, tokenizer):
-    
-    # dataset = load_from_disk('../data/fingpt-headline')['test']
-    dataset = load_from_disk(Path(__file__).parent.parent / 'data/fingpt-headline-instruct')['test']
-    dataset = dataset.map(partial(test_mapping, args), load_from_cache_file=False)
-    
-    def collate_fn(batch):
-        inputs = tokenizer(
-            [f["prompt"] for f in batch], return_tensors='pt',
-            padding=True, max_length=args.max_length,
-            return_token_type_ids=False
-        )
-        return inputs
-    
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
-    
     out_text_list = []
-    log_interval = len(dataloader) // 5
-
-    for idx, inputs in enumerate(tqdm(dataloader)):
-        inputs = {key: value.to(model.device) for key, value in inputs.items()}
-        res = model.generate(**inputs, max_length=args.max_length, eos_token_id=tokenizer.eos_token_id)
+    for i in tqdm(range(total_steps)):
+        tmp_context = context[i* batch_size: min(len(context), (i+1)* batch_size)]
+        if len(tmp_context) == 0:
+            continue
+        tokens = tokenizer(tmp_context, return_tensors='pt', padding=True, max_length=512, return_token_type_ids=False)
+        for k in tokens.keys():
+            tokens[k] = tokens[k].cuda()
+        res = model.generate(**tokens, max_new_tokens=20, eos_token_id=tokenizer.eos_token_id)
         res_sentences = [tokenizer.decode(i, skip_special_tokens=True) for i in res]
-        tqdm.write(f'{idx}: {res_sentences[0]}')
-        if (idx + 1) % log_interval == 0:
-            tqdm.write(f'{idx}: {res_sentences[0]}')
+        # print(f'{i}: {res_sentences[0]}')
         out_text = [o.split("Answer: ")[1] for o in res_sentences]
         out_text_list += out_text
         torch.cuda.empty_cache()
-    
-    dataset = dataset.add_column("out_text", out_text_list)
-    dataset = dataset.map(map_output, load_from_cache_file=False)    
-    dataset = dataset.to_pandas()
-    
-    print(dataset)
-    dataset.to_csv('tmp.csv')
-        
-    # binary
-    acc = accuracy_score(dataset["label"], dataset["pred"])
-    f1 = f1_score(dataset["label"], dataset["pred"], average="binary")
-    
-    # multi-class
-    pred, label = binary2multi(dataset)
 
-    print(f"\n|| Acc: {acc} || F1 binary: {f1} ||\n")
-    print(classification_report(label, pred, digits=4, target_names=['price or not', 'price up', 'price stable',
-                                                                     'price down', 'price past', 'price future',
-                                                                     'event past', 'event future', 'asset comp']))
+    instructions["out_text"] = out_text_list
+    instructions["new_target"] = instructions["target"].apply(change_target)
+    instructions["new_out"] = instructions["out_text"].apply(change_target)
 
-    return dataset
+    acc = accuracy_score(instructions["new_target"], instructions["new_out"])
+    f1_macro = f1_score(instructions["new_target"], instructions["new_out"], average = "macro")
+    f1_micro = f1_score(instructions["new_target"], instructions["new_out"], average = "micro")
+    f1_weighted = f1_score(instructions["new_target"], instructions["new_out"], average = "weighted")
+
+    print(f"FPB: Acc: {acc}. F1 macro: {f1_macro}. F1 micro: {f1_micro}. F1 weighted (BloombergGPT): {f1_weighted}. ")
+
+    return {"acc": acc, "f1": f1_weighted}
+

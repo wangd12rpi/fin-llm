@@ -60,7 +60,7 @@ class ChatmlSpecialTokens(str, Enum):
 def create_datasets(tokenizer, data_args, training_args, apply_chat_template=False):
     def preprocess(samples):
         batch = []
-        for conversation in samples["messages"]:
+        for conversation in samples["chat"]:
             batch.append(tokenizer.apply_chat_template(conversation, tokenize=False))
         return {"content": batch}
 
@@ -191,10 +191,13 @@ def create_and_prepare_model(args, data_args, training_args):
         model.resize_token_embeddings(len(tokenizer), pad_to_multiple_of=8)
     else:
         tokenizer = AutoTokenizer.from_pretrained(
-            args.model_name_or_path, trust_remote_code=True, add_eos_token=True,
+            args.model_name_or_path, trust_remote_code=True, add_eos_token=True, padding_side='right'
         )
-        print("auto add eos token")
-        tokenizer.pad_token = tokenizer.eos_token
+        
+        if not tokenizer.pad_token or tokenizer.pad_token_id == tokenizer.eos_token_id:
+            print("**set pad token to tokenizer.pad_token = '<|finetune_right_pad_id|>'**")
+            tokenizer.pad_token = '<|finetune_right_pad_id|>'
+        
 
     if args.use_unsloth:
         # Do model patching and add fast LoRA weights

@@ -40,11 +40,11 @@ tmux new-session -d -s "training_job_${task}" '
   --model_name_or_path '"${model_map[$model_name_short]}"' \
   --dataset_name '"${dataset_map[$task]}"' \
   --chat_template_format "none" \
-  --add_special_tokens False \
-  --append_concat_token False \
+  --add_special_tokens True \
+  --append_concat_token True \
   --splits "train,test" \
   --max_seq_len 2048 \
-  --num_train_epochs 4 \
+  --num_train_epochs 1 \
   --logging_steps 0.05 \
   --log_level "info" \
   --logging_strategy "steps" \

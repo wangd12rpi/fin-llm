@@ -64,7 +64,7 @@ def test_tfns(args, model, tokenizer, prompt_fun=None):
         # tokens.pop('token_type_ids')
         for k in tokens.keys():
             tokens[k] = tokens[k].cuda()
-        res = model.generate(**tokens, max_length=512, eos_token_id=tokenizer.eos_token_id)
+        res = model.generate(**tokens, max_new_tokens=20, eos_token_id=tokenizer.eos_token_id)
         res_sentences = [tokenizer.decode(i, skip_special_tokens=False) for i in res]
         out_text = [o.split("Answer: ")[1] for o in res_sentences]
         # print(res_sentences[0])
@@ -82,4 +82,5 @@ def test_tfns(args, model, tokenizer, prompt_fun=None):
 
     print(f"TFNS: Acc: {acc}. F1 macro: {f1_macro}. F1 micro: {f1_micro}. F1 weighted (BloombergGPT): {f1_weighted}. ")
 
-    return dataset
+    return {"acc": acc, "f1": f1_weighted}
+    
