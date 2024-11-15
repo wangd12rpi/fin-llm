@@ -8,6 +8,8 @@ import datasets
 import torch
 from pathlib import Path
 
+from batch_inference import perform_batch_inference_with_metrics
+
 dic = {
     0:"negative",
     1:'positive',
@@ -50,34 +52,10 @@ def test_tfns(args, model, tokenizer, prompt_fun=None):
     print(f"\n\nPrompt example:\n{dataset['context'][0]}\n\n")
 
     context = dataset['context'].tolist()
-    
-    total_steps = dataset.shape[0]//batch_size + 1
-    print(f"Total len: {len(context)}. Batchsize: {batch_size}. Total steps: {total_steps}")
 
-
-    out_text_list = []
-    for i in tqdm(range(total_steps)):
-        tmp_context = context[i* batch_size:(i+1)* batch_size]
-        tokens = tokenizer(tmp_context, return_tensors='pt', padding=True, max_length=512, return_token_type_ids=False)
-        # tokens.pop('token_type_ids')
-        for k in tokens.keys():
-            tokens[k] = tokens[k].cuda()
-        res = model.generate(**tokens, max_length=512, eos_token_id=tokenizer.eos_token_id)
-        res_sentences = [tokenizer.decode(i, skip_special_tokens=True) for i in res]
-        out_text = [o.split("Answer: ")[1] for o in res_sentences]
-        print(out_text)
-        out_text_list += out_text
-        torch.cuda.empty_cache()
-
-    dataset["out_text"] = out_text_list
-    dataset["new_target"] = dataset["target"].apply(change_target)
-    dataset["new_out"] = dataset["out_text"].apply(change_target)
-
-    acc = accuracy_score(dataset["new_target"], dataset["new_out"])
-    f1_macro = f1_score(dataset["new_target"], dataset["new_out"], average = "macro")
-    f1_micro = f1_score(dataset["new_target"], dataset["new_out"], average = "micro")
-    f1_weighted = f1_score(dataset["new_target"], dataset["new_out"], average = "weighted")
-
-    print(f"Acc: {acc}. F1 macro: {f1_macro}. F1 micro: {f1_micro}. F1 weighted (BloombergGPT): {f1_weighted}. ")
+    # perform batch inference and calculate metrics
+    dataset, acc, f1_macro, f1_micro, f1_weighted = perform_batch_inference_with_metrics(
+        context, dataset, batch_size, tokenizer, model, change_target
+    )
 
     return dataset
