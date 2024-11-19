@@ -3,14 +3,14 @@ import json
 def load_train_texts():
     train_texts = []
     
-    with open("data/train/fingpt_sentiment_train.jsonl", "r") as f:
+    with open("../data/train/fingpt_sentiment_train.jsonl", "r") as f:
         
         for line in f:
             value = json.loads(line.strip())  # Parse each JSON line
-            question = value.get("QUESTION", "")
-            contexts = " ".join(value.get("CONTEXTS", []))
-            answer = value.get("final_decision", "")
-            train_texts.append(f"Question: {question}\nContexts: {contexts}\nAnswer: {answer}")
+            question = value.get("context", "")
+            contexts = value.get("target", [])
+            
+            train_texts.append({"prompt": question, "completion": contexts})
             
     return train_texts
 
@@ -21,8 +21,8 @@ def load_test_texts():
     with open("data/train/fingpt_sentiment_train.jsonl", "r") as f:
         for line in f:
             value = json.loads(line.strip())  # Parse each JSON line
-            question = value.get("QUESTION", "")
-            contexts = " ".join(value.get("CONTEXTS", []))
+            question = value.get("context", "")
+            #contexts = " ".join(value.get("CONTEXTS", []))
             train_texts.append(f"Question: {question}\nContexts: {contexts}\nAnswer: ")
             
     return train_texts
