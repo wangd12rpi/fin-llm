@@ -80,7 +80,7 @@ def test_fiqa(args, model, tokenizer, prompt_fun=add_instructions):
     context = dataset['context'].tolist()
     
     # perform batch inference and calculate metrics
-    dataset, acc, f1_macro, f1_micro, f1_weighted = perform_batch_inference_with_metrics(
+    dataset, acc, f1_macro, f1_micro, f1_weighted, batch_times, total_execution_time, gpu_memory_usage = perform_batch_inference_with_metrics(
         context, dataset, batch_size, tokenizer, model, change_target
     )
    
