@@ -10,9 +10,10 @@ from tfns import test_tfns
 from nwgi import test_nwgi
 from headline import test_headline
 from ner import test_ner
+from xbrl import test_xbrl
 # from convfinqa import test_convfinqa
-from fineval import test_fineval
-from finred import test_re
+# from fineval import test_fineval
+# from finred import test_re
 
 import sys
 
@@ -23,17 +24,18 @@ from utils import *
 def main(args):
     model_name = args.base_model
 
-    # bnb_config = BitsAndBytesConfig(
-    #     load_in_4bit=args.quant_bits == 4,  # Load in 4-bit if quant_bits is 4
-    #     load_in_8bit=args.quant_bits == 8,  # Load in 8-bit if quant_bits is 8
-    #     bnb_4bit_quant_type="nf4",
-    #     bnb_4bit_use_double_quant=True,
-    #     bnb_4bit_compute_dtype=torch.bfloat16
-    # )
+    bnb_config = BitsAndBytesConfig(
+        # load_in_4bit=args.quant_bits == 4,  # Load in 4-bit if quant_bits is 4
+        # load_in_8bit=args.quant_bits == 8,  # Load in 8-bit if quant_bits is 8
+        load_in_8bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_compute_dtype=torch.bfloat16
+    )
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name, trust_remote_code=True,
-        # quantization_config=bnb_config,
+        quantization_config=bnb_config,
         device_map="auto",
         torch_dtype=torch.bfloat16,
 
@@ -76,8 +78,15 @@ def main(args):
                 results[(args.base_model, args.quant_bits, args.rank, data)] = test_headline(args, model, tokenizer)
             elif data == 'ner':
                 results[(args.base_model, args.quant_bits, args.rank, data)] = test_ner(args, model, tokenizer)
+            elif data == 'xbrl_tags':
+                results[(args.base_model, args.quant_bits, args.rank, data)] = test_xbrl(args, model, tokenizer)
+            elif data == 'xbrl_value':
+                results[(args.base_model, args.quant_bits, args.rank, data)] = test_xbrl(args, model, tokenizer, path="../xbrl/xbrl_value_test.jsonl")
             else:
                 raise ValueError('undefined dataset.')
+
+    print("\n*********\nAfter eval:", torch.cuda.max_memory_allocated() // 1024 // 1024 // 1024)
+
     print('Evaluation Ends.')
 
 
@@ -112,8 +121,12 @@ def map_dataset_name(jsonl_name):
     return "headline"
   elif "ner" in jsonl_name:
     return "ner"
-  elif "xbrl" in jsonl_name:
-    return "xbrl"
+  elif "xbrl_tags" in jsonl_name:
+    return "xbrl_tags"
+  elif "xbrl_value" in jsonl_name:
+    return "xbrl_value"
+  elif "xbrl_train" in jsonl_name:
+    return "xbrl_value,xbrl_tags"
   else:
     return None  
 
@@ -187,13 +200,16 @@ def generate_markdown_tables(results):
 
 
 if __name__ == "__main__":
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,7"
+    import os
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
     results = {} 
     finetuned_models_dir = "../finetuned_models"
-    dataset_base = "fiqa,fpb,tfns,nwgi,headline,ner"
+    # dataset_base = "fiqa,fpb,tfns,nwgi,headline,ner,xbrl_tags,xbrl_value"
+    dataset_base = "xbrl_tags,xbrl_value"
     base_models = [
         # "meta-llama/Llama-3.1-70B-Instruct", 
-        "meta-llama/Llama-3.1-8B-Instruct"]
+        # "meta-llama/Llama-3.1-8B-Instruct"
+    ]
     
     for model_name in base_models:
         args = {
@@ -219,6 +235,9 @@ if __name__ == "__main__":
 
             if dataset_name is None:
                 print(f"Skipping folder with unknown dataset: {folder_name}")
+                continue
+
+            if "xbrl" not in dataset_name:
                 continue
                 
             # Construct the full path to the fine-tuned model
