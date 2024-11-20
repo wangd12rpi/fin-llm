@@ -1,8 +1,8 @@
 
 # Task selection (headline, ner, senti, xbrl)
 task="xbrl"  
-quant_bits=8  
-lora_r=8
+quant_bits=4  
+lora_r=4
 model_name_short="llama_3.1_8b"  # Can be "llama_3.1_8b" or "llama_3.1_70b"
 
 # Map tasks to dataset paths
@@ -27,7 +27,7 @@ declare -A model_map=(
 
 # Start the training job in a detached tmux session
 tmux new-session -d -s "training_job_${task}" '
-  export CUDA_VISIBLE_DEVICES=0,1,4,7
+  export CUDA_VISIBLE_DEVICES=0,1,4
     export NCCL_IGNORE_DISABLED_P2P=1
     export TRANSFORMERS_NO_ADVISORY_WARNINGS=1
     export TOKENIZERS_PARALLELISM=0

@@ -35,7 +35,7 @@ def main(args):
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name, trust_remote_code=True,
-        quantization_config=bnb_config,
+        # quantization_config=bnb_config,
         device_map="auto",
         torch_dtype=torch.bfloat16,
 
@@ -58,8 +58,8 @@ def main(args):
 
     if args.peft_model != "":
         model = PeftModel.from_pretrained(model, args.peft_model)
-    else:
-        model.half()
+    # else:
+    #     model.half()
 
     model = model.eval()
     model.generation_config.pad_token_id = tokenizer.pad_token_id
