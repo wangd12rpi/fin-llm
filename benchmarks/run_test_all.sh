@@ -2,7 +2,7 @@
 
 # Start the training job in a detached tmux session
 tmux new-session -d -s "bench_job" '
- export CUDA_VISIBLE_DEVICES=1,2,3,7
+ export CUDA_VISIBLE_DEVICES=0,1,4,7
   eval "$(conda shell.bash hook)"
   conda activate finenv
   

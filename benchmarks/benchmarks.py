@@ -13,7 +13,7 @@ from ner import test_ner
 # from convfinqa import test_convfinqa
 from fineval import test_fineval
 from finred import test_re
-
+from xbrl import test_xbrl
 
 import sys
 sys.path.append('../')
@@ -38,7 +38,7 @@ def main(args):
     
     model = AutoModelForCausalLM.from_pretrained(
         model_name, trust_remote_code=True, 
-        # quantization_config=bnb_config,
+        quantization_config=bnb_config,
         device_map="auto",
         torch_dtype=torch.bfloat16,
 
@@ -47,7 +47,7 @@ def main(args):
     model.model_parallel = True
 
     tokenizer = AutoTokenizer.from_pretrained(model_name,     
-        torch_dtype=torch.float16,
+        torch_dtype=torch.bfloat16,
         trust_remote_code=True,
         device_map="auto"
     )
@@ -69,8 +69,7 @@ def main(args):
 
     if args.peft_model != "":
         model = PeftModel.from_pretrained(model, args.peft_model)
-    else:
-        model.half()
+
         
     model = model.eval()
     model.generation_config.pad_token_id = tokenizer.pad_token_id
@@ -97,6 +96,8 @@ def main(args):
                 test_fineval(args, model, tokenizer)
             elif data == 're':
                 test_re(args, model, tokenizer)
+            elif data == 'xbrl_tag':
+                test_xbrl(args, model, tokenizer)
             else:
                 raise ValueError('undefined dataset.')
     
