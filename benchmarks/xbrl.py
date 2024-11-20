@@ -21,7 +21,7 @@ def evaluate_accuracy(out, target):
 
   for x, y in zip(out, target):
 
-    if y in x:  # Check if ground truth is included in LLM output
+    if x.startswith(y):  # Check if ground truth is included in LLM output
       correct_count += 1
     else:
       print(x.replace("\n", ""), "ACTUAL:" , y)
@@ -52,7 +52,7 @@ def test_xbrl(args, model, tokenizer, path="../xbrl/xbrl_xbrl_tags_test.jsonl", 
         tokens = tokenizer(tmp_context, return_tensors='pt', padding=True, max_length=512, return_token_type_ids=False)
         for k in tokens.keys():
             tokens[k] = tokens[k].cuda()
-        res = model.generate(**tokens, max_new_tokens=30, eos_token_id=tokenizer.eos_token_id)
+        res = model.generate(**tokens, max_new_tokens=20, eos_token_id=tokenizer.eos_token_id)
         res_sentences = [tokenizer.decode(i, skip_special_tokens=True) for i in res]
         out_text = [o.split("\nAnswer:")[1].strip() for o in res_sentences]
         # print(f'llm: {out_text[0]}, actual: {tmp_target[0]}')
