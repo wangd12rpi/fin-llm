@@ -119,10 +119,14 @@ def map_dataset_name(jsonl_name):
 
 
 def get_batch_size(model_name):
-  if "70b" in model_name.lower():
-    return 8
-  else:
-    return 128
+    """Returns batch size based on model scale."""
+    if "70b" in model_name.lower():
+        return 8
+    elif "mamba-130m" in model_name.lower():
+        return 512  # Adjust batch size for Mamba
+    else:
+        return 128
+
 
 
 def generate_markdown_tables(results):
@@ -192,22 +196,37 @@ if __name__ == "__main__":
     finetuned_models_dir = "../finetuned_models"
     dataset_base = "fiqa,fpb,tfns,nwgi,headline,ner"
     base_models = [
-        # "meta-llama/Llama-3.1-70B-Instruct", 
-        "meta-llama/Llama-3.1-8B-Instruct"]
+    "meta-llama/Llama-3.1-8B-Instruct",
+    "state-spaces/mamba-130m-hf"
+]
+
     
     for model_name in base_models:
+    # Mamba-specific configuration
+    if "mamba" in model_name:
+        # Set Mamba-specific arguments
         args = {
-                    "base_model": model_name,
-                    "quant_bits": -1,
-                    "peft_model": "",
-                    "dataset": dataset_base,  
-                    "batch_size": get_batch_size(model_name),  
-                    "rank": -1
-                }
-        
-        print(f"Running main() for folder: {args}")
-        args = argparse.Namespace(**args) 
-        main(args)
+            "base_model": model_name,
+            "quant_bits": -1,  # Default, can adjust if quantization supported for Mamba
+            "peft_model": "",
+            "dataset": dataset_base,
+            "batch_size": 512,  # Adjusted batch size for smaller model
+            "rank": -1
+        }
+    else:
+        # Llama-specific arguments
+        args = {
+            "base_model": model_name,
+            "quant_bits": -1,
+            "peft_model": "",
+            "dataset": dataset_base,
+            "batch_size": get_batch_size(model_name),
+            "rank": -1
+        }
+
+    print(f"Running main() for model: {args['base_model']}")
+    args = argparse.Namespace(**args)
+    main(args)
 
 
     
@@ -228,14 +247,28 @@ if __name__ == "__main__":
             batch_size = get_batch_size(model_name)
 
             # Set up the arguments for the main function
-            args = {
-                "base_model": "meta-llama/" + model_name.replace("meta-llama-", ""),
-                "quant_bits": quant_bits,
-                "peft_model": peft_model_path,
-                "dataset": dataset_name,  
-                "batch_size": batch_size,  
-                "rank": rank
-            }
+            # Set up the arguments for the main function
+            if "mamba" in model_name:
+                # For Mamba models, use the full model_name directly
+                args = {
+                    "base_model": model_name,
+                    "quant_bits": quant_bits,
+                    "peft_model": peft_model_path,
+                    "dataset": dataset_name,  
+                    "batch_size": batch_size,  
+                    "rank": rank
+                }
+            else:
+                # For Llama models, format the base_model path as before
+                args = {
+                    "base_model": "meta-llama/" + model_name.replace("meta-llama-", ""),
+                    "quant_bits": quant_bits,
+                    "peft_model": peft_model_path,
+                    "dataset": dataset_name,  
+                    "batch_size": batch_size,  
+                    "rank": rank
+                }
+
             
             print(f"Running main() for folder: {args}")
             args = argparse.Namespace(**args) 
