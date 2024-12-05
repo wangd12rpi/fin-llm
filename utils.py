@@ -1,6 +1,6 @@
 import os
 import datasets
-
+import json
 # A dictionary to store various prompt templates.
 template_dict = {
     'default': 'Instruction: {instruction}\nInput: {input}\nAnswer: '
@@ -213,3 +213,117 @@ def load_dataset(names, from_remote=False):
         dataset_list.extend([tmp_dataset] * replication_factor)
 
     return dataset_list
+
+def preprocess(tokenizer, example, max_seq_length):
+    prompt = example["context"]
+    target = example["target"]
+    prompt_ids = tokenizer.encode(prompt, max_length=max_seq_length, truncation=True)
+    target_ids = tokenizer.encode(
+        target,
+        max_length=max_seq_length,
+        truncation=True,
+        add_special_tokens=False)
+    input_ids = prompt_ids + target_ids + [tokenizer.eos_token_id]
+    return {"input_ids": input_ids, "seq_len": len(prompt_ids)}
+
+def load_jsonl_dataset(path, tokenizer):
+    """
+    Loads a dataset from a JSONL file, tokenizes it, and returns a Hugging Face Dataset.
+    
+    Args:
+    file_path: Path to the JSONL file.
+    tokenizer: Hugging Face tokenizer.
+    
+    Returns:
+    A Hugging Face Dataset with 'input_ids' and 'labels' columns.
+    """
+
+    # data = []
+    # with open(file_path, 'r') as f:
+    #     for line in f:
+            # example = json.loads(line)
+            # context = example['context']
+            # target = example['target']
+            # # Tokenize the prompt.
+            # prompt_ids = tokenizer(
+            #     context,
+            #     padding=False,
+            #     max_length=512,
+            #     truncation=True
+            # )['input_ids']
+            
+            # # Tokenize the target/output.
+            # target_ids = tokenizer(
+            #     target,
+            #     padding=False,
+            #     max_length=512,
+            #     truncation=True,
+            #     add_special_tokens=False
+            # )['input_ids']
+            
+            # # Combine tokenized prompt and target output.
+            # input_ids = prompt_ids + target_ids
+            
+            # # Check if the combined length exceeds the maximum allowed length.
+            # exceed_max_length = len(input_ids) >= 512
+            
+            # # Add an end-of-sequence (EOS) token if it's not already present
+            # # and if the sequence length is within the limit.
+            # if input_ids[-1] != tokenizer.eos_token_id and not exceed_max_length:
+            #     input_ids.append(tokenizer.eos_token_id)
+            
+            # # Create label IDs for training.
+            # # The labels should start from where the prompt ends, and be padded for the prompt portion.
+            # label_ids = [tokenizer.pad_token_id] * len(prompt_ids) + input_ids[len(prompt_ids):]
+            
+            # data.append({
+            #     "input_ids": input_ids,
+            #     "labels": label_ids,
+            #     # "exceed_max_length": exceed_max_length
+            # })
+            # example = json.loads(line)
+            # context = example['context']
+            # target = example['target']
+            
+            # # Combine context and target with appropriate formatting
+            # # You might need to adjust this based on your model's requirements
+            # full_text = f"{context}{target}"
+            
+            #  # First check the length without truncation
+            # test_tokens = tokenizer(
+            #     full_text,
+            #     truncation=False,
+            #     add_special_tokens=True
+            # )
+            
+            # # Skip if longer than max_length
+            # if len(test_tokens["input_ids"]) > 512:
+            #     continue
+                
+            # # If within length limit, tokenize with padding
+            # tokenized = tokenizer(
+            #     full_text,
+            #     max_length=512,
+            #     truncation=True,
+            #     add_special_tokens=False,
+            #     padding='max_length',
+            # )
+            
+            # # Convert to regular Python lists (tensors can't be easily serialized)
+            # item = {
+            #     "input_ids": tokenized["input_ids"],
+            #     "attention_mask": tokenized["attention_mask"],
+            #     "labels": tokenized["input_ids"]  # For language modeling, labels are the same as input_ids
+            # }
+            
+            # data.append(item)
+    max_seq_length = 512
+
+    with open(path, "r") as f:
+        for line in f.readlines():
+            example = json.loads(line)
+            feature = preprocess(tokenizer, example, max_seq_length)
+            if len(feature["input_ids"]) > max_seq_length:
+                continue
+            yield feature
+

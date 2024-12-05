@@ -1,5 +1,5 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-#from peft import PeftModel, get_peft_model, LoraConfig, TaskType  # 0.4.0
+from peft import PeftModel, get_peft_model, LoraConfig, TaskType  # 0.4.0
 import torch
 import argparse
 
@@ -21,27 +21,35 @@ from utils import *
 
 
 def main(args):
+    # if args.from_remote:
+    #     model_name = parse_model_name(args.base_model, args.from_remote)
+    # else:
+    #     model_name = '../' + parse_model_name(args.base_model)
+
     model_name = args.base_model
+        
+    # bnb_config = BitsAndBytesConfig(
+    #     load_in_4bit=args.quant_bits == 4,  # Load in 4-bit if quant_bits is 4
+    #     load_in_8bit=args.quant_bits == 8,  # Load in 8-bit if quant_bits is 8
+    #     bnb_4bit_quant_type="nf4",
+    #     bnb_4bit_use_double_quant=True,
+    #     bnb_4bit_compute_dtype=torch.bfloat16
+    # )
     
-    # Check if the model name contains "mamba"
-    if "mamba" in model_name.lower():
-        from state_spaces import MambaForCausalLM  # Import Mamba model
-        model = MambaForCausalLM.from_pretrained(
-            model_name, trust_remote_code=True,
-            device_map="auto",
-            torch_dtype=torch.float16
-        )
-    else:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name, trust_remote_code=True,
-            device_map="auto",
-            torch_dtype=torch.float16
-        )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name, trust_remote_code=True, 
+        # quantization_config=bnb_config,
+        device_map="auto",
+        torch_dtype=torch.float16
+
+    )
 
     model.model_parallel = True
 
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     
+    # tokenizer.pad_token_id = tokenizer.eos_token_id
+
     tokenizer.padding_side = "left"
     if args.base_model == 'qwen':
         tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids('<|endoftext|>')
@@ -51,7 +59,21 @@ def main(args):
         model.resize_token_embeddings(len(tokenizer))
     
     print(f'pad: {tokenizer.pad_token_id}, eos: {tokenizer.eos_token_id}')
-    
+    # model.generation_config.pad_token_id = tokenizer.pad_token_id
+
+    # peft_config = LoraConfig(
+    #     task_type=TaskType.CAUSAL_LM,
+    #     inference_mode=False,
+    #     r=8,
+    #     lora_alpha=32,
+    #     lora_dropout=0.1,
+    #     target_modules=lora_module_dict[args.base_model],
+    #     bias='none',
+    # )
+    # model = get_peft_model(model, peft_config)
+    # model.load_state_dict(torch.load(args.peft_model + '/pytorch_model.bin'))
+
+    model = PeftModel.from_pretrained(model, args.peft_model)
     model = model.eval()
     
     with torch.no_grad():
@@ -88,7 +110,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", required=True, type=str)
     parser.add_argument("--base_model", required=True, type=str)
-    #parser.add_argument("--peft_model", required=True, type=str)
+    parser.add_argument("--peft_model", required=True, type=str)
     parser.add_argument("--max_length", default=512, type=int)
     parser.add_argument("--batch_size", default=8, type=int, help="The train batch size per device")
     parser.add_argument("--instruct_template", default='default')
@@ -98,6 +120,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     print(args.base_model)
-    #print(args.peft_model)
+    print(args.peft_model)
     
     main(args)

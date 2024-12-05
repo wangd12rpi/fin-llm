@@ -1,6 +1,3 @@
-import warnings
-warnings.filterwarnings("ignore")
-
 from sklearn.metrics import accuracy_score,f1_score
 from datasets import load_dataset, load_from_disk
 from tqdm import tqdm

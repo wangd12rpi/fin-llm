@@ -1,0 +1,12 @@
+# Ignore Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore hidden files and directories
+.*
+!/.gitignore
+
+# Ignore wandb logs
+wandb/
+
+# Ignore train/ft_models folder
+train/ft_models/
