@@ -71,7 +71,9 @@ def test_fpb(args, model, tokenizer, prompt_fun=None):
 
     context = instructions['context'].tolist()
 
-    # perform batch inference using the refactored function
+    dataset = instructions.copy()  # Assuming instructions is a pandas DataFrame
+
+    #perform batch inference using the refactored function
     dataset, acc, f1_macro, f1_micro, f1_weighted, batch_times, total_execution_time, gpu_memory_usage = perform_batch_inference_with_metrics(
         context, dataset, batch_size, tokenizer, model, change_target
     )
