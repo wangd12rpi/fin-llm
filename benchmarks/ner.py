@@ -1,95 +1,62 @@
-from seqeval.metrics import classification_report
-from datasets import load_dataset, load_from_disk
+import warnings
+warnings.filterwarnings("ignore")
+
+from sklearn.metrics import accuracy_score,f1_score
+from datasets import load_dataset, load_from_disk, Dataset
 from tqdm import tqdm
 import datasets
 import torch
+
 from torch.utils.data import DataLoader
 from functools import partial
-import re
-import sys
-import numpy as np
 from pathlib import Path
-sys.path.append('../')
-from utils import *
+from batch_inference import perform_batch_inference_with_metrics
 
-    
-ent_dict = {
-    'PER': 'person',
-    'ORG': 'organization',
-    'LOC': 'location',
-}
-ent_dict_rev = {v: k for k, v in ent_dict.items()}
+dic = {
+        0:"negative",
+        1:'neutral',
+        2:'positive',
+    }
 
+with open(Path(__file__).parent / 'sentiment_templates.txt') as f:
+    templates = [l.strip() for l in f.readlines()]
+    
 
-def cvt_text_to_pred(tokens, text):
-    
-    preds = ['O' for _ in range(len(tokens))]
-    for pred_txt in text.lower().strip('.').split(','):
-    
-        pred_match = re.match(r'^(.*) is an? (.*)$', pred_txt)
-        if pred_match is not None:
-            entity, entity_type = pred_match.group(1).strip(), pred_match.group(2).strip()
-            entity_pred = ent_dict_rev.get(entity_type, 'O')
-            entity_tokens = entity.split()
+def format_example(example: dict) -> dict:
+    context = f"Instruction: {example['instruction']}\n"
+    if example.get("input"):
+        context += f"Input: {example['input']}\n"
+    context += "Answer: "
+    target = example["output"]
+    return {"context": context, "target": target}
 
-            n = len(entity_tokens)
-            for i in range(len(tokens) - n + 1):
-                if tokens[i:i+n] == entity_tokens and preds[i:i+n] == ['O'] * n:
-                    preds[i:i+n] = ['B-' + entity_pred] + ['I-' + entity_pred] * (n-1)
-                    break
-        else:
-            print(pred_txt)
-            
-    return preds
+def change_target(x):
+    if 'organization' in x.lower():
+        return 'organization'
+    elif 'person' in x.lower():
+        return 'negative'
+    elif 'location' in x.lower():
+        return 'location'
+    return ''
+    
+def test_ner(args, model, tokenizer, prompt_fun=None):
+    batch_size = args.batch_size
+    instructions = load_dataset("FinGPT/fingpt-ner-cls")
+    # instructions = load_from_disk(Path(__file__).parent.parent / "data/financial_phrasebank-sentences_50agree/")
+    instructions = instructions["test"]    
+    # print example
+    instructions = instructions.to_pandas()
 
+    instructions[["context","target"]] = instructions.apply(format_example, axis = 1, result_type="expand")
 
-def map_output(feature):
-    tokens = feature['input'].lower().split()
-    label = cvt_text_to_pred(tokens, feature['output'])
-    pred = cvt_text_to_pred(tokens, feature['out_text'])
+    print(f"\n\nPrompt example:\n{instructions['context'][0]}\n\n")
+    context = instructions['context'].tolist()
+    dataset = instructions.copy()  
     
-    return {'label': label, 'pred': pred}
+    #perform batch inference using the refactored function
+    dataset, acc, f1_macro, f1_micro, f1_weighted, batch_times, total_execution_time, gpu_memory_usage = perform_batch_inference_with_metrics(
+        context, dataset, batch_size, tokenizer, model, change_target
+    )
 
+    return {"acc": acc, "f1": f1_weighted}
 
-def test_ner(args, model, tokenizer):
-
-    dataset = datasets.load_dataset('FinGPT/fingpt-ner-cls')['test']
-    dataset = dataset.map(partial(test_mapping, args), load_from_cache_file=False)
-    
-    def collate_fn(batch):
-        inputs = tokenizer(
-            [f["prompt"] for f in batch], return_tensors='pt',
-            padding=True, max_length=args.max_length,
-            return_token_type_ids=False
-        )
-        return inputs
-    
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, collate_fn=collate_fn, shuffle=False)
-    
-    out_text_list = []
-    log_interval = len(dataloader) // 5
-
-    for idx, inputs in enumerate(tqdm(dataloader)):
-        inputs = {key: value.to(model.device) for key, value in inputs.items()}
-        res = model.generate(**inputs, max_length=args.max_length, eos_token_id=tokenizer.eos_token_id)
-        res_sentences = [tokenizer.decode(i, skip_special_tokens=True) for i in res]
-        if (idx + 1) % log_interval == 0:
-            tqdm.write(f'{idx}: {res_sentences[0]}')
-        out_text = [o.split("Answer: ")[1] for o in res_sentences]
-        print(out_text)
-        out_text_list += out_text
-        torch.cuda.empty_cache()
-    
-    dataset = dataset.add_column("out_text", out_text_list)
-    dataset = dataset.map(map_output, load_from_cache_file=False)    
-    dataset = dataset.to_pandas()
-    
-    print(dataset)
-    dataset.to_csv('tmp.csv')
-    
-    label = [d.tolist() for d in dataset['label']]
-    pred = [d.tolist() for d in dataset['pred']]
-    
-    print(classification_report(label, pred, digits=4))
-
-    return dataset
