@@ -94,11 +94,21 @@ def get_data(args):
     # return dataset
     # return load_jsonl_dataset(args.dataset, tokenizer)
     
-    dataset = datasets.Dataset.from_generator(
-        lambda: load_dataset_jsonl(args.dataset), num_proc = 64
-    )
+    dataset_names = args.dataset.split(',')
+    datasets_list = []
 
-    dataset = dataset.train_test_split(test_size=0.05)
+    #load each dataset
+    for dataset_name in dataset_names:
+        dataset = datasets.Dataset.from_generator(
+            lambda: load_dataset_jsonl(dataset_name.strip())
+        )
+        datasets_list.append(dataset)
+
+    #concatenate all datasets
+    full_dataset = datasets.concatenate_datasets(datasets_list)
+
+    #split into training and testing sets
+    dataset = full_dataset.train_test_split(test_size=0.05)
     return dataset
     
 
@@ -298,6 +308,12 @@ if __name__ == "__main__":
     # Argument parser for command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--local_rank", default=0, type=int)
+    parser.add_argument(
+        "--dataset",
+        required=True,
+        type=str,
+        help="Comma-separated list of dataset file paths (e.g., dataset1.jsonl,dataset2.jsonl)."
+    )
     parser.add_argument("--dataset", required=True, type=str)
     parser.add_argument("--base_model", required=True, type=str)
     parser.add_argument("--max_length", default=512, type=int)
