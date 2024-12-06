@@ -53,6 +53,10 @@ def main(args):
     )
     
     # tokenizer.pad_token_id = tokenizer.eos_token_id
+    # Move both the model and tokenizer to the same device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    
 
     tokenizer.padding_side = "left"
     if args.base_model == 'qwen':
