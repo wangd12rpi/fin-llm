@@ -29,28 +29,38 @@ def init_model():
 
 
 def model_training(
-    model_name = "mamba2-130m",
-    model = MambaLMHeadModel.from_pretrained (pretrained_model_name="state-spaces/mamba2-130m"),
-    tokenizer = AutoTokenizer.from_pretrained("state-spaces/mamba-2.8b-hf"),
-    params = {"lr": 5e-5, "num_training_steps": 30, "weight_decay": 0.1},
-    device = torch.device("cpu")
-    ):
-        
-   
-    # load model
+    model_name="mamba2-130m",
+    dataset_name="FinGPT/fingpt-sentiment-train",  # Default to one dataset
+    model=MambaLMHeadModel.from_pretrained(pretrained_model_name="state-spaces/mamba2-130m"),
+    tokenizer=AutoTokenizer.from_pretrained("state-spaces/mamba-2.8b-hf"),
+    params={"lr": 5e-5, "num_training_steps": 30, "weight_decay": 0.1},
+    device=torch.device("cpu")
+):
+    # Load model
     model.to(device)
     
-    # load parameters
+    # Load parameters
     lr = params["lr"]
     num_training_steps = params["num_training_steps"]
     weight_decay = params["weight_decay"]
-    print(f"Training {model_name} with parameters: {params}")
+    print(f"Training {model_name} on {dataset_name} with parameters: {params}")
     
-    tokenized_datasets = load_from_disk("data/mamba2_tokenized_pubmed_abstract_512")
-    train_data = tokenized_datasets['train']
-    test_data = tokenized_datasets['test']
+    # Load dataset
+    raw_datasets = load_dataset(dataset_name)
+    train_data = raw_datasets["train"]
+    test_data = raw_datasets["test"]
     
-    scaler = GradScaler()
+    # Preprocess the datasets
+    def tokenize_function(examples):
+        return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=512)
+    
+    tokenized_train = train_data.map(tokenize_function, batched=True)
+    tokenized_test = test_data.map(tokenize_function, batched=True)
+    
+    tokenized_train.set_format(type="torch", columns=["input_ids", "attention_mask"])
+    tokenized_test.set_format(type="torch", columns=["input_ids", "attention_mask"])
+    
+    # Set batch size based on model size
     if model_name == "mamba2-130m":
         batch_size = 32
     elif model_name == "mamba2-2.7b":
@@ -58,113 +68,57 @@ def model_training(
     else:
         print("Invalid model name")
         return
-    #batch_size = 32  # Adjust based on your GPU memory
-        
-    accumulation_steps = 8  # Increase the batch size by accumulation_steps
-    print(f"Actual batch size: {batch_size * accumulation_steps}")
-
-    train_dataloader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
-    test_dataloader = DataLoader(test_data, shuffle=True, batch_size=batch_size)
-
+    
+    # DataLoader
+    train_dataloader = DataLoader(tokenized_train, shuffle=True, batch_size=batch_size)
+    test_dataloader = DataLoader(tokenized_test, shuffle=False, batch_size=batch_size)
+    
+    # Optimizer and scheduler
     optimizer = AdamW(model.parameters(), lr=lr, betas=(0.9, 0.95), weight_decay=weight_decay)
-    # num_training_steps = 4800 # default training steps
     num_epoch = num_training_steps // len(train_dataloader) + 1
-    num_warmup_steps = int(0.1 * num_training_steps)  # 10% of training steps for warmup
+    num_warmup_steps = int(0.1 * num_training_steps)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
-
-    print(f"num_epoch: {num_epoch}")
-
+    
+    print(f"Number of epochs: {num_epoch}")
     global_step = 0
     model.train()
-    with SummaryWriter(log_dir='runs/biomamba') as writer:
+    
+    # Training loop
+    with SummaryWriter(log_dir=f"runs/{dataset_name.replace('/', '_')}") as writer:
         for epoch in range(num_epoch):
-            for batch_idx, batch in enumerate(tqdm(train_dataloader, total=min(len(train_dataloader), num_training_steps*accumulation_steps))):
+            for batch_idx, batch in enumerate(tqdm(train_dataloader)):
                 if global_step >= num_training_steps:
                     break
-
-                inputs = batch['input_ids'].to(device)
-                labels = batch['input_ids'].to(device)
-
+                
+                inputs = batch["input_ids"].to(device)
+                labels = batch["input_ids"].to(device)
+                
                 optimizer.zero_grad()
-
                 with autocast():
-                    
                     outputs = model(inputs)
-            
-                    # Get logits
-                    logits = outputs.logits  # Assuming model outputs a named tuple with logits
-                    
-                    # Shift logits and labels for next-token prediction
+                    logits = outputs.logits
                     shift_logits = logits[:, :-1, :].contiguous()
                     shift_labels = labels[:, 1:].contiguous()
-                    
-                    # Compute the loss using CrossEntropyLoss
                     loss_fct = torch.nn.CrossEntropyLoss()
                     loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-            
-
                 
-                # Scale the loss and backpropagate
+                scaler = GradScaler()
                 scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
                 
-                if (batch_idx + 1) % accumulation_steps == 0:
-                    # Gradient clipping
-                    scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                    
-                    # Step the optimizer and scheduler
-                    scaler.step(optimizer)
-                    scaler.update()
-                    scheduler.step()
-
-                    writer.add_scalar('Loss/train', loss.item(), global_step)
-                    global_step += 1
+                writer.add_scalar("Loss/train", loss.item(), global_step)
+                global_step += 1
                 
-                if batch_idx % 1000 == 0 :
-                    model.eval()
-                    with torch.no_grad():
-                        test_loss = 0
-                        for test_idx, test_batch in enumerate(test_dataloader):
-                            if test_idx > 100:
-                                break
-
-                            inputs = test_batch['input_ids'].to(device)
-                            labels = test_batch['input_ids'].to(device)
-                            ##
-                            outputs = model(inputs)
-            
-                            # Get logits
-                            logits = outputs.logits  # Assuming model outputs a named tuple with logits
-                            
-                            # Shift logits and labels for next-token prediction
-                            shift_logits = logits[:, :-1, :].contiguous()
-                            shift_labels = labels[:, 1:].contiguous()
-                            
-                            # Compute the loss using CrossEntropyLoss
-                            loss_fct = torch.nn.CrossEntropyLoss()
-                            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-                            
-                            # Accumulate the loss
-                            test_loss += loss.item()
-                            ##
-                        writer.add_scalar('Loss/test', test_loss / test_idx, global_step)
-                        print(f"Test loss: {test_loss / test_idx}")
-                    model.train()
-                    
-    if model_name == "mamba2-130m":
-        model.save_pretrained("checkpoints/biomamba2-130m")
-        tokenizer.save_pretrained("checkpoints/biomamba2-130m")
-    elif model_name == "mamba2-2.7b":
-        model.save_pretrained("checkpoints/biomamba2-2.7b")
-        tokenizer.save_pretrained("checkpoints/biomamba2-2.7b")
-    else:
-        print("Invalid model name")
+                if batch_idx % 100 == 0:
+                    print(f"Epoch: {epoch}, Batch: {batch_idx}, Loss: {loss.item()}")
     
-
-    
-    # model.save_pretrained("../checkpoints/model_checkpoint")
-    # tokenizer.save_pretrained("../checkpoints/model_checkpoint")
-    
+    # Save model
+    save_path = f"checkpoints/{model_name}_{dataset_name.replace('/', '_')}"
+    model.save_pretrained(save_path)
+    tokenizer.save_pretrained(save_path)
+    print(f"Model saved to {save_path}")
     
     return model, tokenizer
 
