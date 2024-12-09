@@ -11,6 +11,8 @@ from torch.utils.data import DataLoader
 from functools import partial
 from pathlib import Path
 import utils
+from batch_inference import perform_batch_inference_with_metrics
+
 
 def change_target(x):
     x = x.replace('"', '').replace('\n', '').replace(' ', '')

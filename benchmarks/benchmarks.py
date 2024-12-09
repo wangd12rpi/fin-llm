@@ -10,6 +10,7 @@ from tfns import test_tfns
 from nwgi import test_nwgi
 from headline import test_headline
 from ner import test_ner
+from xbrl import test_xbrl
 # from convfinqa import test_convfinqa
 #from fineval import test_fineval
 #from finred import test_re
@@ -76,6 +77,8 @@ def main(args):
                 #test_fineval(args, model, tokenizer)
             #elif data == 're':
                 #test_re(args, model, tokenizer)
+            elif data == "xbrl":
+                test_xbrl(args, model, tokenizer)
             else:
                 raise ValueError('undefined dataset.')
 
