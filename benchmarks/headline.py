@@ -6,6 +6,8 @@ import torch
 from torch.utils.data import DataLoader
 from functools import partial
 from pathlib import Path
+from batch_inference import perform_batch_inference_with_metrics
+
 
 import sys
 sys.path.append("../")
@@ -28,46 +30,20 @@ def change_target(x):
     
 def test_headline(args, model, tokenizer, prompt_fun=None):
     batch_size = args.batch_size
-    instructions = load_dataset("FinGPT/fingpt-headline-cls")
+    dataset = load_dataset("FinGPT/fingpt-headline-cls")
     # instructions = load_from_disk(Path(__file__).parent.parent / "data/financial_phrasebank-sentences_50agree/")
-    instructions = instructions["test"]    
+    dataset = dataset["test"]    
     # print example
-    instructions = instructions.to_pandas()
+    dataset = dataset.to_pandas()
 
-    instructions[["context","target"]] = instructions.apply(format_example, axis = 1, result_type="expand")
+    dataset[["context","target"]] = dataset.apply(format_example, axis = 1, result_type="expand")
 
-    print(f"\n\nPrompt example:\n{instructions['context'][0]}\n\n")
-    context = instructions['context'].tolist()
-    
-    total_steps = instructions.shape[0]//batch_size + 1
-    print(f"Total len: {len(context)}. Batchsize: {batch_size}. Total steps: {total_steps}")
+    print(f"\n\nPrompt example:\n{dataset['context'][0]}\n\n")
+    context = dataset['context'].tolist()
 
+    dataset, acc, f1_macro, f1_micro, f1_weighted, batch_times, total_execution_time, gpu_memory_usage = perform_batch_inference_with_metrics(
+        context, dataset, batch_size, tokenizer, model, change_target
+    )
 
-    out_text_list = []
-    for i in tqdm(range(total_steps)):
-        tmp_context = context[i* batch_size: min(len(context), (i+1)* batch_size)]
-        if len(tmp_context) == 0:
-            continue
-        tokens = tokenizer(tmp_context, return_tensors='pt', padding=True, max_length=512, return_token_type_ids=False)
-        for k in tokens.keys():
-            tokens[k] = tokens[k].cuda()
-        res = model.generate(**tokens, max_new_tokens=20, eos_token_id=tokenizer.eos_token_id)
-        res_sentences = [tokenizer.decode(i, skip_special_tokens=True) for i in res]
-        # print(f'{i}: {res_sentences[0]}')
-        out_text = [o.split("Answer: ")[1] for o in res_sentences]
-        out_text_list += out_text
-        torch.cuda.empty_cache()
-
-    instructions["out_text"] = out_text_list
-    instructions["new_target"] = instructions["target"].apply(change_target)
-    instructions["new_out"] = instructions["out_text"].apply(change_target)
-
-    acc = accuracy_score(instructions["new_target"], instructions["new_out"])
-    f1_macro = f1_score(instructions["new_target"], instructions["new_out"], average = "macro")
-    f1_micro = f1_score(instructions["new_target"], instructions["new_out"], average = "micro")
-    f1_weighted = f1_score(instructions["new_target"], instructions["new_out"], average = "weighted")
-
-    print(f"FPB: Acc: {acc}. F1 macro: {f1_macro}. F1 micro: {f1_micro}. F1 weighted (BloombergGPT): {f1_weighted}. ")
-
-    return {"acc": acc, "f1": f1_weighted}
+    return dataset
 
