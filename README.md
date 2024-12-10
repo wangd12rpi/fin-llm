@@ -18,17 +18,9 @@ This project would produce comprehensive understanding in using multiple novel l
 The first milestone is an extended evaluation using newer LLMs, low-rank techniques, and datasets.
 The second milestone involves extending this conference paper [1] into a longer journal paper by inserting new methodologies and results.
 
-### Estimated Project Timeline
-09/01 ~ 09/15/2024: Formulate a plan for testing new LLMs, low-rank techniques, and datasets. Specify which LLMs and datasets will be included in the testing process. 
-09/16 ~ 10/31/2024: Complete codes required for testing, and start the evaluation process. 
-10/31 ~ 11/30/2024: Complete a journal paper with new results.
-
-
-
 ### References
-[1] Xiao-Yang Liu, Jie Zhang, Guoxuan Wang, Weiqing Tong, Anwar Walid. FinGPT-HPC: Efficient Pretraining and Finetuning Large Language Models for Financial Applications with High-Performance Computing. IEEE ICDCS 2024.  
-[2] Qin, H., Ma, X., Zheng, X., Li, X., Zhang, Y., Liu, S., ... & Magno, M. (2024). Accurate LoRA-finetuning quantization of LLMs via information retention.   
-[3] Hayou, S., Ghosh, N., & Yu, B. (2024). Lora+: Efficient low rank adaptation of large models.   
-[4] Hameed, M. G. A., Milios, A., Reddy, S., & Rabusseau, G. (2024). ROSA: Random Subspace Adaptation for Efficient Fine-Tuning.  
-[5] Mao, Y., Ge, Y., Fan, Y., Xu, W., Mi, Y., Hu, Z. and Gao, Y., 2024. A Survey on LoRA of Large Language Models. arXiv preprint arXiv:2407.11046.  
+[1] Xiao-Yang Liu, Jie Zhang, Guoxuan Wang, Weiqing Tong, Anwar Walid. FinGPT-HPC: Efficient Pretraining and Finetuning Large Language Models for Financial Applications with High-Performance Computing. IEEE ICDCS 2024. 
+[2] Mao, Y., Ge, Y., Fan, Y., Xu, W., Mi, Y., Hu, Z. and Gao, Y., 2024. A Survey on LoRA of Large Language Models. arXiv preprint arXiv:2407.11046.
+[3] Vlad Fomenko, Han Yu, Jongho Lee, Stanley Hsieh, Weizhu Chen. A Note on LoRA, 2024. https://arxiv.org/abs/2404.05086 
+  
 
