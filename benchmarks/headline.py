@@ -7,26 +7,13 @@ from torch.utils.data import DataLoader
 from functools import partial
 from pathlib import Path
 from batch_inference import perform_batch_inference_with_metrics
+from formatPrompt import format_example
 
+from changeTarget import change_target
 
 import sys
 sys.path.append("../")
 
-
-def format_example(example: dict) -> dict:
-    context = f"Instruction: {example['instruction']}\n"
-    if example.get("input"):
-        context += f"Input: {example['input']}\n"
-    context += "Answer: "
-    target = example["output"]
-    return {"context": context, "target": target}
-
-def change_target(x):
-    if 'yes' in x.lower():
-        return 'Yes'
-    elif 'no' in x.lower():
-        return 'No'
-    return ''
     
 def test_headline(args, model, tokenizer, prompt_fun=None):
     batch_size = args.batch_size

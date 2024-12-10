@@ -8,6 +8,7 @@ from batch_inference import perform_batch_inference_with_metrics
 
 import pandas as pd
 from formatPrompt import format_example
+from changeTarget import change_target
 
 
 dic = {
@@ -19,14 +20,6 @@ dic = {
     'mildly positive':'neutral',
     'neutral':'neutral',
 }
-
-def change_target(x):
-    if 'positive' in x or 'Positive' in x:
-        return 'positive'
-    elif 'negative' in x or 'Negative' in x:
-        return 'negative'
-    else:
-        return 'neutral'
 
 def test_nwgi(args, model, tokenizer, prompt_fun=None):
     batch_size = args.batch_size

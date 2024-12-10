@@ -10,6 +10,8 @@ from pathlib import Path
 
 from batch_inference import perform_batch_inference_with_metrics
 from formatPrompt import format_example
+from changeTarget import change_target
+
 
 
 dic = {
@@ -17,14 +19,6 @@ dic = {
     1:'positive',
     2:'neutral',
 }
-
-def change_target(x):
-    if 'positive' in x or 'Positive' in x:
-        return 'positive'
-    elif 'negative' in x or 'Negative' in x:
-        return 'negative'
-    else:
-        return 'neutral'
 
 def test_tfns(args, model, tokenizer, prompt_fun=None):
     batch_size = args.batch_size
