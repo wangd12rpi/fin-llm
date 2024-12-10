@@ -10,7 +10,6 @@ import pandas as pd
 from formatPrompt import format_example
 from changeTarget import change_target
 
-
 dic = {
     'strong negative':"negative",
     'moderately negative':"negative",

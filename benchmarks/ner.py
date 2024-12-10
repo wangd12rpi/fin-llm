@@ -15,7 +15,6 @@ from formatPrompt import format_example
 from changeTarget import change_target
 
 
-
 dic = {
         0:"negative",
         1:'neutral',
