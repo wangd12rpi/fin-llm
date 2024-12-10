@@ -7,6 +7,8 @@ from pathlib import Path
 from batch_inference import perform_batch_inference_with_metrics
 
 import pandas as pd
+from formatPrompt import format_example
+
 
 dic = {
     'strong negative':"negative",
@@ -17,14 +19,6 @@ dic = {
     'mildly positive':'neutral',
     'neutral':'neutral',
 }
-
-def format_example(example: dict) -> dict:
-    context = f"Instruction: {example['instruction']}\n"
-    if example.get("input"):
-        context += f"Input: {example['input']}\n"
-    context += "Answer: "
-    target = example["output"]
-    return {"context": context, "target": target}
 
 def change_target(x):
     if 'positive' in x or 'Positive' in x:

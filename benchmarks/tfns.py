@@ -9,20 +9,14 @@ import torch
 from pathlib import Path
 
 from batch_inference import perform_batch_inference_with_metrics
+from formatPrompt import format_example
+
 
 dic = {
     0:"negative",
     1:'positive',
     2:'neutral',
 }
-
-def format_example(example: dict) -> dict:
-    context = f"Instruction: {example['instruction']}\n"
-    if example.get("input"):
-        context += f"Input: {example['input']}\n"
-    context += "Answer: "
-    target = example["output"]
-    return {"context": context, "target": target}
 
 def change_target(x):
     if 'positive' in x or 'Positive' in x:

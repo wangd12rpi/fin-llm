@@ -11,6 +11,8 @@ from torch.utils.data import DataLoader
 from functools import partial
 from pathlib import Path
 from batch_inference import perform_batch_inference_with_metrics
+from formatPrompt import format_example
+
 
 dic = {
         0:"negative",
@@ -21,14 +23,6 @@ dic = {
 with open(Path(__file__).parent / 'sentiment_templates.txt') as f:
     templates = [l.strip() for l in f.readlines()]
     
-
-def format_example(example: dict) -> dict:
-    context = f"Instruction: {example['instruction']}\n"
-    if example.get("input"):
-        context += f"Input: {example['input']}\n"
-    context += "Answer: "
-    target = example["output"]
-    return {"context": context, "target": target}
 
 def change_target(x):
     if 'positive' in x or 'Positive' in x:
