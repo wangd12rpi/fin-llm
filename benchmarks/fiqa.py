@@ -11,6 +11,7 @@ from pathlib import Path
 from batch_inference import perform_batch_inference_with_metrics
 from formatPrompt import format_example
 from changeTarget import change_target
+from voteOutput import vote_output
 
 with open(Path(__file__).parent / 'sentiment_templates.txt') as f:
     templates = [l.strip() for l in f.readlines()]
@@ -27,19 +28,6 @@ def make_label(x):
     elif x >=-0.1 and x < 0.1: return "neutral"
     elif x >= 0.1: return "positive"
     
-def vote_output(x):
-    output_dict = {'positive': 0, 'negative': 0, 'neutral': 0} 
-    for i in range(len(templates)):
-        pred = change_target(x[f'out_text_{i}'].lower())
-        output_dict[pred] += 1
-    if output_dict['positive'] > output_dict['negative']:
-        return 'positive'
-    elif output_dict['negative'] > output_dict['positive']:
-        return 'negative'
-    else:
-        return 'neutral'
-    
-
 def test_fiqa(args, model, tokenizer, prompt_fun=add_instructions):
     batch_size = args.batch_size
     dataset = load_dataset('pauri32/fiqa-2018')
