@@ -10,7 +10,7 @@ from pathlib import Path
 
 from batch_inference import perform_batch_inference_with_metrics
 from formatPrompt import format_example
-
+from changeTarget import change_target
 
 with open(Path(__file__).parent / 'sentiment_templates.txt') as f:
     templates = [l.strip() for l in f.readlines()]
@@ -26,14 +26,6 @@ def make_label(x):
     if x < - 0.1: return "negative"
     elif x >=-0.1 and x < 0.1: return "neutral"
     elif x >= 0.1: return "positive"
-
-def change_target(x):
-    if 'positive' in x or 'Positive' in x:
-        return 'positive'
-    elif 'negative' in x or 'Negative' in x:
-        return 'negative'
-    else:
-        return 'neutral'
     
 def vote_output(x):
     output_dict = {'positive': 0, 'negative': 0, 'neutral': 0} 
