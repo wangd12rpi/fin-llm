@@ -1,4 +1,4 @@
-# Efficient Pretraining and Finetuning Large Language Models
+# FinLoRA: Finetuning Qauntized Financial Large Language Models using Low-Rank Adaptation
 
 
 ### Motivation
