@@ -7,11 +7,6 @@ Large Language Models (LLMs) have shown remarkable performance, but pre-training
 ### Key Methodology
 The paper FinGPT-HPC [1] explores low-rank structure and quantization techniques in pretraining and finetuning LLMs and evaluates its performance on both general tasks and financial tasks, and it shows significant speedup and lower GPU memory consumption. This ICDCS conference paper will be extended into a journal paper by employing more comprehensive testing.
 
-Task 1: Evaluate performance on larger and newer LLMs. The current paper tested GPT-2-127M, GPT-2-1.5B, Llama-2-7B, and Llama-2-13B. We plan on testing on newer and larger LLMs including Llama-3.1-8B and Llama-3.1-70B. This will provide a more comprehensive evaluation of the proposed techniques across a range of LLM sizes and architectures.
-
-Task 2: Explore more low–rank and quantization techniques. Other LoRA techniques [5], such as information retention QLora (IR-QLoRA) [2], LoRA+ [3], and Random Subspace Adaptation (ROSA) [4], showed improved performance in the fine-tuning stage. We plan to test these techniques on financial tasks to evaluate its domain-specific performance and make comparisons. 
-
-Task 3: More comprehensive evaluation with more diverse financial test datasets. The present test datasets incorporate both sentiment analysis and named entity recognition tasks [1]. Our objective is to expand the range of tasks, such as XBRL files, news headline classification, for a more thorough assessment.
 
 ### Expected Outcomes 
 This project would produce comprehensive understanding in using multiple novel low-rank [5] and quantization structures in both pretraining and finetuning stages, and its performance for both general tasks and financial tasks.
