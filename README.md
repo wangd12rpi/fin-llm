@@ -42,19 +42,16 @@ implementation should be relatively straightforward.
 
 ### Improve Performance and Scalability for Inference
 
-SLoRA[5] is designed for the serving of many LoRA adapters efficiently. It stores all adapters in the memory and
+SLoRA [5] is designed for the serving of many LoRA adapters efficiently. It stores all adapters in the memory and
 fetches the adapters needed to GPU memory. It might be possible to use some of the ideas of SLoRA with LoRA MoE for a
-more
-efficient implementation of LoRA MoE.
+more efficient implementation of LoRA MoE.
 
 Difficulty: Current SLoRA implementation does not work with HuggingFace, and does not support newer model like Llama 3.
 
-### Federated Learning with Enhanced Privacy
+### Federated Learning for Privacy-Preserving
 
-Multiple institutions might want to collaborate for finetuning using combined data using Federated Learning.
-Differentially Private Low-Rank Adaptation (DP-LoRA) [5] offers an approach using federated learning and by adding noise
-in weight updates to avoid inferring sensitive information from model outputs. Adding zero-knowledge learning on top of
-DP-LoRA allows additional privacy.
+Federated Learning setting: Multiple institutions might collaborate in the finetuning task using locally stored data.
+Differentially Private Low-Rank Adaptation (DP-LoRA) [6] offers an approach by adding noise in weight updates to avoid inferring sensitive information from model weights/outputs. Adding zero-knowledge learning on top of DP-LoRA may enhance privacy-preserving.
 
 ## References
 
@@ -67,11 +64,12 @@ preprint arXiv:2407.11046.
 [3] Vlad Fomenko, Han Yu, Jongho Lee, Stanley Hsieh, Weizhu Chen. A Note on LoRA, 2024. https://arxiv.org/abs/2404.05086
 
 [4] E.L. Buehler, M.J. Buehler. X-LoRA: Mixture of Low-Rank Adapter Experts, a Flexible Framework for Large Language
-Models with Applications in Protein Mechanics and Design}, https://arxiv.org/abs/2402.07148
+Models with Applications in Protein Mechanics and Design. APL Machine Learning, 2024.
 
 [5] Sheng, Ying and Cao, Shiyi and Li. Dacheng and Hooper, et al. S-LoRA: Serving Thousands of Concurrent LoRA
 Adapters, https://arxiv.org/pdf/2311.03285
 
-[6] Xiao-Yang Liu, Rongyi Zhu, Daochen Zha, Jiechao Gao, Shan Zhong, Matt White, Meikang Qiu,
-Differentially Private Low-Rank Adaptation of Large Language Model Using Federated
-Learning, https://arxiv.org/abs/2312.17493
+[6] Xiao-Yang Liu, Rongyi Zhu, Daochen Zha, Jiechao Gao, Shan Zhong, Matt White, Meikang Qiu, Differentially Private Low-Rank Adaptation of Large Language Model Using Federated
+Learning, ACM Transactions on Management Information Systems, 2024.
+
+[7] Dannong Wang, Daniel Kim, Bo Jin, Xingjian Zhao, Tianfan Fu, Steve Yang, and Xiao-Yang Liu. FinLoRA: Finetuning quantized financial large language models using low-rank adaptation. AAAI Workshop on Connecting Low-Rank Representations in AI, 2025
