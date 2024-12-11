@@ -17,7 +17,7 @@ from xbrl import test_xbrl
 
 import sys
 sys.path.append('../')
-from utils import *
+from src.finetune.utils import *
 
 
 def main(args):

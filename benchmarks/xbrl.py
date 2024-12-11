@@ -10,7 +10,8 @@ import pandas as pd
 from torch.utils.data import DataLoader
 from functools import partial
 from pathlib import Path
-import utils
+from src.finetune import utils
+
 
 def change_target(x):
     x = x.replace('"', '').replace('\n', '').replace(' ', '')

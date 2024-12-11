@@ -18,7 +18,7 @@ from xbrl import test_xbrl
 import sys
 
 sys.path.append('../')
-from utils import *
+from src.finetune.utils import *
 
 
 def main(args):
@@ -81,7 +81,7 @@ def main(args):
             elif data == 'xbrl_tags':
                 results[(args.base_model, args.quant_bits, args.rank, data)] = test_xbrl(args, model, tokenizer)
             elif data == 'xbrl_value':
-                results[(args.base_model, args.quant_bits, args.rank, data)] = test_xbrl(args, model, tokenizer, path="../xbrl/xbrl_value_test.jsonl")
+                results[(args.base_model, args.quant_bits, args.rank, data)] = test_xbrl(args, model, tokenizer, path="../data/xbrl/xbrl_value_test.jsonl")
             else:
                 raise ValueError('undefined dataset.')
 
