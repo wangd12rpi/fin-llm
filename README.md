@@ -1,12 +1,13 @@
 # FinLoRA: Finetuning Quantized Large Language Models for Financial Applications Using Low-Rank Adaptation
 
+FinLoRA: Open counterpart of BloombergGPT
+
 ## Introduction
 
 ### Motivation
 
-Large Language Models (LLMs) have shown remarkable performance, but pre-training and fine-tuning LLMs can be
-computationally expensive. The low-rank and quantization techniques show success. Our project aims to provide a thorough
-evaluation of these techniques with a focus on financial applications.
+Financial large Language Models (FinLLMs) have shown remarkable performance, but pre-training LLMs can be
+computationally expensive. The low-rank and quantization techniques are promising. 
 
 ### Current XBRL Tasks
 
