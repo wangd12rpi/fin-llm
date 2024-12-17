@@ -7,7 +7,7 @@ FinLoRA: Open counterpart of BloombergGPT
 ### Motivation
 
 Financial large Language Models (FinLLMs) have shown remarkable performance, but pre-training LLMs can be
-computationally expensive. The low-rank and quantization techniques are promising. 
+computationally expensive. The low-rank adaptation and quantization techniques are promising. 
 
 ### Current XBRL Tasks
 
