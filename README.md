@@ -42,15 +42,15 @@ implementation should be relatively straightforward.
 
 ### Improve Performance and Scalability for Inference
 
-SLoRA [5] is designed for the serving of many LoRA adapters efficiently. It stores all adapters in the memory and
+S-LoRA [5] is designed for serving many LoRA adapters efficiently. It stores all adapters in the memory and
 fetches the adapters needed to GPU memory. It might be possible to use some of the ideas of SLoRA with LoRA MoE for a
 more efficient implementation of LoRA MoE.
 
-Difficulty: Current SLoRA implementation does not work with HuggingFace, and does not support newer model like Llama 3.
+Difficulty: Current S-LoRA implementation does not work with HuggingFace, and does not support newer model like Llama 3.
 
-### Federated Learning for Privacy-Preserving
+### Federated Learning for Financial Data Privacy
 
-Federated Learning setting: Multiple institutions might collaborate in the finetuning task using locally stored data.
+Federated Learning setting: Multiple institutions (banks) might collaborate in the finetuning task using locally stored data.
 Differentially Private Low-Rank Adaptation (DP-LoRA) [6] offers an approach by adding noise in weight updates to avoid inferring sensitive information from model weights/outputs. Adding zero-knowledge learning on top of DP-LoRA may enhance privacy-preserving.
 
 ## References
